@@ -1,0 +1,1032 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="theme-color" content="#203c35" />
+    <title>SoccerMap · Local workspace</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <script type="module" src="/app.js"></script>
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to workspace</a>
+    <aside class="sidebar">
+      <a href="#import" class="brand" aria-label="SoccerMap home"
+        ><svg viewBox="0 0 32 24" aria-hidden="true">
+          <rect x="1" y="1" width="30" height="22" rx="2" />
+          <path d="M16 1v22M1 7h5v10H1m30-10h-5v10h5" />
+          <circle cx="16" cy="12" r="4" /></svg
+        >SoccerMap</a
+      >
+      <nav aria-label="Workspace">
+        <a href="#import" data-nav="analyze">Analyze a clip</a
+        ><a href="#saved" data-nav="saved">Analysis history</a
+        ><a href="#environment" data-nav="environment">Environment</a>
+      </nav>
+      <div class="local-note">
+        <span class="status-dot"></span>Local workspace
+        <p>
+          Footage stays local unless you enable cloud AI keyframes. Results are estimates of what the
+          camera can see.
+        </p>
+        <a href="#about">About this prototype</a>
+      </div>
+    </aside>
+    <main id="main" tabindex="-1">
+      <header>
+        <div>
+          <h1 id="page-title">Analyze a clip</h1>
+          <p id="page-subtitle">
+            Turn your footage into a field map you can review.
+          </p>
+        </div>
+        <span class="local-badge">On this computer</span>
+      </header>
+      <ol class="steps" aria-label="Analysis steps">
+        <li id="step-import">Import</li>
+        <li id="step-configure">Set up</li>
+        <li id="step-review">Review</li>
+      </ol>
+      <div id="notice" role="alert" hidden></div>
+      <section id="view-import" class="view">
+        <div class="import-grid">
+          <div class="panel import-panel">
+            <h2>Choose your clip</h2>
+            <label class="upload-zone" id="dropzone" for="clip-file"
+              ><svg viewBox="0 0 36 36" aria-hidden="true">
+                <path d="M18 25V5m-7 7 7-7 7 7M6 24v7h24v-7" /></svg
+              ><strong>Drop your match footage here</strong
+              ><span>MP4, MOV, AVI or M4V · up to 500 MB</span
+              ><span class="button primary">Choose a local clip</span
+              ><span>Or drop it here. The original file stays unchanged.</span
+              ><input id="clip-file" type="file" accept=".mp4,.mov,.avi,.m4v"
+            /></label>
+            <div class="demo-row">
+              <div>
+                <strong>Explore a 60-second demo</strong>
+                <p>Synthetic play, team shape and a deliberate mapping gap.</p>
+              </div>
+              <button id="use-demo">
+                Use demo <span aria-hidden="true">→</span>
+              </button>
+            </div>
+            <p class="fine-print">
+              The demo demonstrates the interface. It is not an analysis of real
+              footage.
+            </p>
+          </div>
+          <aside class="guidance">
+            <h2>Before you start</h2>
+            <ol>
+              <li>
+                <strong>Start with a wide view</strong>
+                <p>
+                  Choose a short clip with clear field markings. A steady,
+                  elevated view works best.
+                </p>
+              </li>
+              <li>
+                <strong>Set up the field once</strong>
+                <p>
+                  Reuse a saved camera view, or place four points when automatic
+                  detection needs help.
+                </p>
+              </li>
+              <li>
+                <strong>Check the lines before the stats</strong>
+                <p>
+                  Compare the field overlay with your footage. Unconfirmed
+                  frames stay off the map.
+                </p>
+              </li>
+            </ol>
+            <a href="#environment"
+              >Check your environment <span aria-hidden="true">→</span></a
+            >
+          </aside>
+        </div>
+        <section
+          id="imported-clips"
+          class="clip-catalog"
+          aria-labelledby="imported-title"
+          hidden
+        >
+          <h2 id="imported-title">Imported clips</h2>
+          <p class="help">
+            Use footage already on this computer. Linked originals stay in their
+            current folder.
+          </p>
+          <div id="clip-list"></div>
+        </section>
+        <details class="large-video-help">
+          <summary>Working with a video larger than 500 MB?</summary>
+          <p>
+            Link it when starting the workspace to avoid making another copy:
+          </p>
+          <code>python workspace.py --import-video "/path/to/match.mp4"</code>
+          <p>
+            Then choose it from Imported clips and select a short passage to
+            analyze.
+          </p>
+        </details>
+      </section>
+      <section id="view-configure" class="view" hidden>
+        <div id="clip-summary" class="clip-summary"></div>
+        <form id="settings-form">
+          <section class="camera-section" aria-labelledby="camera-heading">
+            <div class="section-intro">
+              <h2 id="camera-heading">Camera setup</h2>
+              <p>
+                Use the same setup for clips with the same view. A pan or zoom
+                needs a new check.
+              </p>
+            </div>
+            <div class="camera-controls">
+              <label for="camera-setup">Field mapping</label>
+              <div class="camera-choice">
+                <select id="camera-setup">
+                  <option value="">Automatic field detection</option>
+                </select>
+                <button type="button" id="open-camera-editor">
+                  Place four points
+                </button>
+              </div>
+              <p id="camera-note" class="help">
+                Automatic detection reuses a verified field while the view stays
+                still.
+              </p>
+            </div>
+          </section>
+          <section
+            id="camera-editor"
+            class="camera-editor"
+            aria-labelledby="setup-title"
+            hidden
+          >
+            <div class="setup-heading">
+              <div>
+                <h2 id="setup-title">Match four field markings</h2>
+                <p>
+                  Choose a marking, then place its point on the video. Spread
+                  the points across the visible field.
+                </p>
+              </div>
+              <button type="button" id="close-camera-editor">
+                Close editor
+              </button>
+            </div>
+            <p id="setup-error" class="warning" role="alert" hidden></p>
+            <div class="setup-toolbar">
+              <label
+                >Source frame<input
+                  id="setup-frame"
+                  type="number"
+                  min="0"
+                  step="1"
+                  value="0"
+              /></label>
+              <button type="button" id="load-camera-frame">Load frame</button>
+              <label
+                >Zoom<input
+                  id="setup-zoom"
+                  type="range"
+                  min="1"
+                  max="3"
+                  step="0.25"
+                  value="1"
+              /></label>
+              <span id="setup-count" role="status">0 of 4 points placed</span>
+            </div>
+            <div class="setup-grid">
+              <div>
+                <div class="setup-viewport">
+                  <canvas
+                    id="setup-image"
+                    width="960"
+                    height="540"
+                    tabindex="0"
+                    aria-label="Camera frame. Click to place the selected point. Enter places it at the center; arrow keys adjust by one pixel, Shift and arrow by ten."
+                  ></canvas>
+                </div>
+                <p class="help">
+                  Drag a point to adjust it. You can also use the pixel fields
+                  or arrow keys on the image.
+                </p>
+              </div>
+              <div class="setup-inspector">
+                <div
+                  id="setup-points"
+                  class="point-tabs"
+                  role="group"
+                  aria-label="Selected point"
+                ></div>
+                <label>Field marking<select id="setup-marking"></select></label>
+                <canvas
+                  id="setup-field"
+                  width="420"
+                  height="280"
+                  aria-label="Reference pitch showing the four selected markings"
+                ></canvas>
+                <p class="help">
+                  Top and bottom refer to this diagram. Match each numbered
+                  point to the same marking in the video.
+                </p>
+                <div class="paired">
+                  <label
+                    >Image x (px)<input
+                      id="point-x"
+                      type="number"
+                      min="0"
+                      step="1"
+                      disabled /></label
+                  ><label
+                    >Image y (px)<input
+                      id="point-y"
+                      type="number"
+                      min="0"
+                      step="1"
+                      disabled
+                  /></label>
+                </div>
+                <button type="button" id="reset-points">Clear points</button>
+              </div>
+            </div>
+            <div class="setup-finish">
+              <label
+                >Setup name<input
+                  id="setup-name"
+                  type="text"
+                  maxlength="80"
+                  placeholder="East stand, wide view"
+              /></label>
+              <button
+                type="button"
+                id="preview-camera"
+                class="primary"
+                disabled
+              >
+                Preview field lines
+              </button>
+            </div>
+            <div id="setup-review" class="setup-review" hidden>
+              <p>
+                The green lines should follow the painted field markings. Four
+                points fit exactly even when the wrong markings are selected, so
+                check the rest of the field too.
+              </p>
+              <label class="check"
+                ><input id="setup-reviewed" type="checkbox" />I checked that the
+                projected lines match this view</label
+              >
+              <button type="button" id="save-camera" class="primary" disabled>
+                Save camera setup
+              </button>
+            </div>
+          </section>
+          <div class="settings-grid">
+            <fieldset class="panel" aria-labelledby="field-settings-title">
+              <h2 id="field-settings-title">Field &amp; conditions</h2>
+              <div class="paired">
+                <label
+                  >Length (m)<input
+                    name="length"
+                    type="number"
+                    min="90"
+                    max="120"
+                    step="0.5"
+                    value="105"
+                    required /></label
+                ><label
+                  >Width (m)<input
+                    name="width"
+                    type="number"
+                    min="45"
+                    max="90"
+                    step="0.5"
+                    value="68"
+                    required
+                /></label>
+              </div>
+              <p class="help">
+                105 × 68 m is the tested baseline. Other dimensions remain
+                experimental.
+              </p>
+              <label class="check"
+                ><input name="enhance" type="checkbox" />Enhance dark
+                footage</label
+              >
+              <p class="help">Improve contrast before field detection.</p>
+              <label class="check"
+                ><input name="multisport" type="checkbox" checked />Try
+                multi-sport line search</label
+              >
+              <p class="help">An experimental fallback for shared fields.</p>
+              <label class="check"
+                ><input name="register_views" type="checkbox" />Try panorama
+                registration</label
+              >
+              <p class="help">
+                Experimental. Match an overlapping pan to a verified view, then
+                check its field lines. Leave off for the baseline.
+              </p>
+              <label class="check"
+                ><input name="verify_lines" type="checkbox" />Verify lines on
+                every output frame</label
+              >
+              <p class="help">
+                An extra check, with additional processing time.
+              </p>
+            </fieldset>
+            <fieldset class="panel" aria-labelledby="processing-settings-title">
+              <h2 id="processing-settings-title">Processing detail</h2>
+              <label>Analysis engine<select name="engine">
+                <option value="fast">Fast keyframe engine</option>
+                <option value="classic">Classic configurable engine</option>
+              </select></label>
+              <p class="help">Fast mode chooses its own sampling, enhancement and player detection.
+                Stride, ball cadence, player toggle and field-condition controls below apply to
+                classic mode. A saved camera setup also uses classic mode.</p>
+              <label class="check"><input name="ai_keyframes" type="checkbox" />
+                Allow cloud AI keyframes for this run</label>
+              <p class="help">Off by default. In fast mode only, enabling this sends sampled video
+                frames to OpenAI using your own API key, with a $0.30 per-run budget.
+                Leave it off to process footage locally after model setup.</p>
+              <label class="check"
+                ><input name="low_memory" type="checkbox" checked />Low memory
+                mode</label
+              >
+              <p class="help">
+                Uses the CPU and smaller player images, one frame at a time.
+                Slower, with less detail for distant players. Runs stop if
+                memory gets too low.
+              </p>
+              <label
+                >Starting source frame<input
+                  name="start_frame"
+                  type="number"
+                  min="0"
+                  max="100000000"
+                  step="1"
+                  value="0"
+                  required
+              /></label>
+              <label
+                >Maximum input frames<input
+                  name="max_frames"
+                  type="number"
+                  min="30"
+                  max="7200"
+                  step="30"
+                  value="300"
+                  required
+              /></label>
+              <p class="help" id="duration-hint">
+                Start with about 10 seconds.
+              </p>
+              <label
+                >Process every Nth frame <output id="stride-value">3</output
+                ><input name="stride" type="range" min="1" max="10" value="3"
+              /></label>
+              <p class="help">
+                Higher values mean fewer samples. Playback keeps the source
+                timing.
+              </p>
+              <label
+                >Scan the ball every Nth sampled frame<input
+                  name="ball_every"
+                  type="number"
+                  min="1"
+                  max="8"
+                  value="2"
+                  required
+              /></label>
+            </fieldset>
+            <fieldset class="panel" aria-labelledby="detection-settings-title">
+              <h2 id="detection-settings-title">Players and ball</h2>
+              <label class="check"
+                ><input name="players" type="checkbox" checked />Detect
+                players</label
+              >
+              <p class="help">
+                Local detection, track IDs and estimated teams.
+              </p>
+              <label class="check"
+                ><input name="ball" type="checkbox" checked />Include the
+                ball</label
+              >
+              <p class="help">
+                Optional. Missing ball models leave ball positions unavailable.
+              </p>
+              <label
+                >Team A display color<input
+                  id="home-color"
+                  type="color"
+                  value="#d54b3a" /></label
+              ><label
+                >Team B display color<input
+                  id="away-color"
+                  type="color"
+                  value="#4172cd"
+              /></label>
+              <p class="help">
+                Colors affect the interactive map. The exported video keeps its
+                fixed team colors.
+              </p>
+            </fieldset>
+          </div>
+          <div class="action-bar">
+            <button type="button" id="change-clip">Change clip</button>
+            <p id="run-note">Settings are fixed when the run starts.</p>
+            <button class="primary" type="submit" id="start-run">
+              Run analysis
+            </button>
+          </div>
+        </form>
+      </section>
+      <section id="view-processing" class="view" hidden>
+        <div class="process-panel panel">
+          <h2 id="process-title">Preparing your analysis</h2>
+          <p id="process-description">
+            With cloud AI off, your clip stays on this computer. You can leave this page open while
+            processing finishes.
+          </p>
+          <h3 id="process-run-name"></h3>
+          <dl id="process-settings" class="process-settings"></dl>
+          <progress id="process-progress" max="1" value="0"></progress>
+          <div class="progress-line">
+            <span id="process-stage" role="status">Starting…</span
+            ><span id="process-percent">0%</span>
+          </div>
+          <p id="process-time" class="help"></p>
+          <p id="resume-note" class="help" hidden>
+            Resume keeps the original settings. Completed field and tracking
+            stages are reused when their inputs still match; an unfinished stage
+            starts again.
+          </p>
+          <div class="process-actions">
+            <button id="cancel-run">Cancel analysis</button>
+            <button id="resume-run" class="primary" hidden>
+              Resume analysis
+            </button>
+            <button id="retry-run" hidden>Review settings &amp; retry</button>
+          </div>
+        </div>
+      </section>
+      <section id="view-review" class="view" hidden>
+        <nav class="review-tabs" aria-label="Review sections">
+          <button data-tab="playback" aria-pressed="true">Watch</button
+          ><button data-tab="stats" aria-pressed="false">Match stats</button
+          ><button data-tab="shape" aria-pressed="false">Team positions</button
+          ><button data-tab="export" aria-pressed="false">Export</button>
+        </nav>
+        <div id="provenance" class="provenance"></div>
+        <div class="camera-review-actions">
+          <button id="repair-mapping" hidden>Adjust field setup</button>
+          <button id="save-current-view" hidden>Save this camera view</button>
+        </div>
+        <section
+          id="review-camera"
+          class="camera-editor"
+          hidden
+          aria-label="Save camera view"
+        >
+          <h2>Check this field mapping</h2>
+          <p id="review-camera-frame"></p>
+          <img
+            id="review-camera-image"
+            alt="Projected field lines on the selected source frame"
+          />
+          <label
+            >Setup name<input
+              id="review-camera-name"
+              maxlength="80"
+              value="Reviewed camera view"
+          /></label>
+          <label class="check"
+            ><input id="review-camera-checked" type="checkbox" />The projected
+            lines match the painted field markings</label
+          >
+          <div class="camera-review-actions">
+            <button id="confirm-current-view" class="primary" disabled>
+              Save camera setup</button
+            ><button id="close-current-view">Close</button>
+          </div>
+          <p id="review-camera-saved" role="status"></p>
+        </section>
+        <p id="run-warnings" class="warning" role="status" hidden></p>
+        <div id="tab-playback">
+          <div class="panel review-panel">
+            <div class="review-heading">
+              <div>
+                <h2 id="review-name">Your analysis</h2>
+                <p id="review-detail"></p>
+              </div>
+              <span class="legend"
+                ><i class="home-dot"></i>Team A <i class="away-dot"></i>Team
+                B</span
+              >
+            </div>
+            <div
+              id="coverage-status"
+              class="coverage-status"
+              role="status"
+            ></div>
+            <div class="view-bar">
+              <div
+                class="segmented"
+                id="layout-choice"
+                role="group"
+                aria-label="Choose what to show"
+              >
+                <button data-layout="film-map" aria-pressed="true">
+                  Film + map</button
+                ><button data-layout="film-3d" aria-pressed="false">
+                  Film + 3D</button
+                ><button data-layout="film" aria-pressed="false">Film</button
+                ><button data-layout="map" aria-pressed="false">Map</button
+                ><button data-layout="3d" aria-pressed="false">3D</button>
+              </div>
+              <div class="view-tools">
+                <button
+                  id="toggle-coverage"
+                  class="chip"
+                  aria-pressed="false"
+                  title="Shade the space each defense covers and highlight open space"
+                >
+                  <i class="chip-swatch coverage-swatch"></i>Defense coverage</button
+                ><button
+                  id="toggle-draw"
+                  class="chip"
+                  aria-pressed="false"
+                  title="Draw arrows and zones on the field (D)"
+                >
+                  <svg viewBox="0 0 20 20" aria-hidden="true">
+                    <path
+                      d="M3 17l3.5-1L16 6.5 13.5 4 4 13.5zM12 5.5l2.5 2.5"
+                    />
+                  </svg>
+                  Draw</button
+                ><button
+                  id="expand-review"
+                  class="chip"
+                  aria-pressed="false"
+                  title="Fill the screen (F)"
+                >
+                  <svg viewBox="0 0 20 20" aria-hidden="true">
+                    <path d="M3 8V3h5M12 3h5v5M17 12v5h-5M8 17H3v-5" />
+                  </svg>
+                  <span>Expand</span>
+                </button>
+              </div>
+            </div>
+            <div id="draw-bar" class="draw-bar" hidden>
+              <div
+                class="segmented small"
+                role="group"
+                aria-label="Drawing tool"
+              >
+                <button data-tool="arrow" aria-pressed="true">Arrow</button
+                ><button data-tool="pen" aria-pressed="false">Pen</button
+                ><button data-tool="circle" aria-pressed="false">Zone</button>
+              </div>
+              <div class="swatches" role="group" aria-label="Drawing color">
+                <button
+                  data-color="#ffd84a"
+                  aria-pressed="true"
+                  aria-label="Yellow"
+                ></button
+                ><button
+                  data-color="#ffffff"
+                  aria-pressed="false"
+                  aria-label="White"
+                ></button
+                ><button
+                  data-color="#ff5a4e"
+                  aria-pressed="false"
+                  aria-label="Red"
+                ></button
+                ><button
+                  data-color="#5ad1ff"
+                  aria-pressed="false"
+                  aria-label="Blue"
+                ></button>
+              </div>
+              <button id="draw-undo" class="chip">Undo</button
+              ><button id="draw-clear" class="chip">Clear all</button>
+              <span class="draw-hint"
+                >Drag on the film, map or 3D view. Drawings stick to the field
+                in every view.</span
+              >
+              <button id="draw-done" class="chip">Done</button>
+            </div>
+            <div
+              class="playback-grid"
+              id="playback-grid"
+              data-layout="film-map"
+            >
+              <div class="media-pane" id="pane-film">
+                <div class="pane-title">Annotated video</div>
+                <div class="film-wrap">
+                  <video
+                    id="result-video"
+                    preload="metadata"
+                    playsinline
+                    aria-label="Annotated analysis video"
+                  ></video>
+                  <canvas
+                    id="film-marks"
+                    class="marks-layer"
+                    aria-hidden="true"
+                  ></canvas>
+                </div>
+                <p id="video-error" hidden>
+                  Playback is unavailable in this browser. Download the MP4 in
+                  Export; the interactive timeline still works.
+                </p>
+              </div>
+              <div class="media-pane" id="pane-map">
+                <div class="pane-title">
+                  Interactive field map <span>Visible tracks only</span>
+                </div>
+                <div class="map-wrap">
+                  <canvas
+                    id="pitch"
+                    width="840"
+                    height="580"
+                    aria-label="Estimated player positions on the pitch. Click a player to follow them."
+                  ></canvas>
+                  <div id="map-unavailable" class="map-unavailable" hidden>
+                    <strong>Map unavailable</strong>
+                    <p>
+                      Field geometry could not be confirmed.<br />Projected
+                      positions are hidden.
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div class="media-pane" id="pane-3d" hidden>
+                <div class="pane-title scene-title">
+                  <div
+                    class="segmented dark"
+                    id="camera-choice"
+                    role="group"
+                    aria-label="3D camera"
+                  >
+                    <button
+                      data-camera="film"
+                      aria-pressed="false"
+                      title="Match the film camera"
+                    >
+                      Film angle</button
+                    ><button
+                      data-camera="orbit"
+                      aria-pressed="true"
+                      title="Drag to orbit, scroll to zoom"
+                    >
+                      Free</button
+                    ><button data-camera="top" aria-pressed="false">Top</button
+                    ><button
+                      data-camera="pov"
+                      aria-pressed="false"
+                      title="See the game from a player"
+                    >
+                      Player view
+                    </button>
+                  </div>
+                </div>
+                <div class="scene-wrap">
+                  <div id="scene3d" class="scene3d"></div>
+                  <div class="pov-controls" id="pov-controls" hidden>
+                    <select
+                      id="pov-player"
+                      aria-label="Player to follow"
+                    ></select>
+                    <div
+                      class="segmented dark small"
+                      role="group"
+                      aria-label="Player view style"
+                    >
+                      <button data-pov="eyes" aria-pressed="true">Eyes</button
+                      ><button data-pov="behind" aria-pressed="false">
+                        Behind
+                      </button>
+                    </div>
+                  </div>
+                  <p id="scene-hint" class="scene-hint">
+                    Drag to orbit · scroll to zoom · click a player to follow
+                  </p>
+                  <div id="scene-unavailable" class="map-unavailable" hidden>
+                    <strong id="scene-unavailable-title"
+                      >Map unavailable</strong
+                    >
+                    <p id="scene-unavailable-text">
+                      Field geometry could not be confirmed at this moment.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="transport">
+              <button id="play" aria-label="Play review">Play</button
+              ><output id="clock">00:00 / 01:00</output>
+              <div class="timeline-wrap">
+                <input
+                  id="timeline"
+                  type="range"
+                  min="0"
+                  step="0.033333"
+                  value="0"
+                  aria-label="Passage playback time"
+                />
+                <div
+                  id="moments"
+                  class="moments"
+                  aria-label="Passes and turnovers"
+                ></div>
+              </div>
+              <button id="jump-gap">Show mapping gap</button>
+            </div>
+            <p id="source-position" class="help source-position"></p>
+            <div id="coverage-legend" class="coverage-legend" hidden>
+              <label
+                >Show coverage for
+                <select id="coverage-team">
+                  <option value="auto">Team without the ball</option>
+                  <option value="0">Team A</option>
+                  <option value="1">Team B</option>
+                </select></label
+              >
+              <span
+                ><i class="key covered"></i>Space the defense reaches
+                first</span
+              >
+              <span
+                ><i class="key gap"></i>Open space attackers reach first</span
+              >
+              <span><i class="key unseen"></i>Outside the camera view</span>
+              <span id="coverage-note" class="coverage-note"></span>
+            </div>
+            <div class="layer-controls">
+              <label
+                ><input id="show-ids" type="checkbox" checked />Track IDs</label
+              ><label
+                ><input id="show-ball" type="checkbox" checked />Ball</label
+              ><label
+                >Map team
+                <select id="map-team">
+                  <option value="all">All visible tracks</option>
+                  <option value="0">Team A</option>
+                  <option value="1">Team B</option>
+                </select></label
+              ><span
+                >Hollow markers fill short gaps. Analytics use measured
+                positions.</span
+              >
+            </div>
+          </div>
+          <div class="review-facts" id="review-facts"></div>
+          <p class="fine-print">
+            A track ID follows a detected track, not a verified person. Coverage
+            is the share of sampled frames with a valid map, not an accuracy
+            score. Players outside the camera view are missing from the
+            analysis.
+          </p>
+        </div>
+        <div id="tab-stats" hidden>
+          <div class="panel">
+            <div class="stats-head">
+              <div>
+                <h2>Match stats</h2>
+                <p>
+                  Estimated from tracked positions and ball proximity in this
+                  passage. Click a player to watch from their view.
+                </p>
+              </div>
+              <button
+                id="flip-sides"
+                title="Use when the attacking directions look reversed"
+              >
+                Swap attacking directions
+              </button>
+            </div>
+            <div id="stats-quality" class="coverage-status" role="status"></div>
+            <div id="stats-body">
+              <div id="team-compare" class="team-compare"></div>
+              <h3 class="stats-section">Key players</h3>
+              <div id="key-players" class="key-players"></div>
+              <div class="stats-grid">
+                <section aria-labelledby="network-title">
+                  <div class="section-row">
+                    <h3 id="network-title" class="stats-section">
+                      Pass network
+                    </h3>
+                    <div
+                      class="segmented small"
+                      id="network-team"
+                      role="group"
+                      aria-label="Team"
+                    >
+                      <button data-team="0" aria-pressed="true">Team A</button
+                      ><button data-team="1" aria-pressed="false">
+                        Team B
+                      </button>
+                    </div>
+                  </div>
+                  <canvas
+                    id="network"
+                    width="840"
+                    height="580"
+                    aria-label="Pass network: average positions joined by completed passes"
+                  ></canvas>
+                  <p class="help" id="network-caption"></p>
+                </section>
+                <section aria-labelledby="moments-title">
+                  <h3 id="moments-title" class="stats-section">Moments</h3>
+                  <ol id="moment-list" class="moment-list"></ol>
+                </section>
+              </div>
+              <h3 class="stats-section">Players</h3>
+              <div class="table-wrap">
+                <table id="player-table" class="player-table"></table>
+              </div>
+            </div>
+            <p class="fine-print">
+              Passes and possession come from which player is closest to the
+              ball, so missed ball detections hide passes. Distance and speed
+              use smoothed positions while a player is on camera. A track ID
+              follows a detected track, not a verified person.
+            </p>
+          </div>
+        </div>
+        <div id="tab-shape" hidden>
+          <div class="panel">
+            <h2>Team positions</h2>
+            <p>
+              Explore observed samples in a chosen window. Missing positions are
+              excluded.
+            </p>
+            <div class="analytics-controls">
+              <label
+                >View<select id="shape-mode">
+                  <option value="average">Average positions</option>
+                  <option value="heatmap">Player heatmap</option>
+                </select></label
+              ><label
+                >Team<select id="shape-team">
+                  <option value="0">Team A</option>
+                  <option value="1">Team B</option>
+                </select></label
+              ><label
+                >From (s)<input
+                  id="interval-start"
+                  type="number"
+                  min="0"
+                  step="0.1"
+                  value="0" /></label
+              ><label
+                >To (s)<input
+                  id="interval-end"
+                  type="number"
+                  min="0"
+                  step="0.1"
+                  value="10" /></label
+              ><label
+                >Attacking direction<select id="direction">
+                  <option value="right">To the right</option>
+                  <option value="left">To the left</option>
+                </select></label
+              >
+            </div>
+            <div id="track-choices" class="track-choices"></div>
+            <div class="shape-grid">
+              <div>
+                <canvas
+                  id="shape-pitch"
+                  width="840"
+                  height="580"
+                  aria-label="Average observed positions or heatmap"
+                ></canvas>
+                <p class="help" id="shape-caption"></p>
+              </div>
+              <div
+                id="shape-summary"
+                class="shape-summary"
+                aria-live="polite"
+              ></div>
+            </div>
+            <p class="warning">
+              Partial camera coverage can bias averages. This is a coaching
+              prompt, not a full-team or full-match measurement.
+            </p>
+          </div>
+        </div>
+        <div id="tab-export" hidden>
+          <section
+            id="run-diagnostics"
+            class="run-diagnostics"
+            aria-label="Processing details"
+          ></section>
+          <div class="panel">
+            <h2>A review you can carry forward.</h2>
+            <p id="export-note"></p>
+            <div class="exports">
+              <article>
+                <span class="file-type">MP4</span>
+                <h3>Annotated review video</h3>
+                <p>
+                  Camera view and estimated field map at source-derived playback
+                  speed. Silent, sampled output.
+                </p>
+                <a id="download-video" class="button primary" download
+                  >Download MP4</a
+                >
+              </article>
+              <article>
+                <span class="file-type">CSV</span>
+                <h3>Position observations</h3>
+                <p>
+                  Source frame, timestamp, track, team and coordinates in
+                  metres. Unavailable coordinates stay blank.
+                </p>
+                <a id="download-csv" class="button primary" download
+                  >Download CSV</a
+                >
+              </article>
+              <article>
+                <span class="file-type">JSON</span>
+                <h3>Analysis record</h3>
+                <p>
+                  Fixed settings, coverage, timing and limitations. Includes
+                  explicit synthetic-demo provenance.
+                </p>
+                <button id="download-settings">Download run details</button>
+              </article>
+            </div>
+            <div class="save-row">
+              <div>
+                <h3>Ready to revisit this analysis?</h3>
+                <p>Save a reference to the result files on this computer.</p>
+              </div>
+              <button id="save-run">Save analysis</button>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section id="view-saved" class="view" hidden>
+        <div id="saved-list"></div>
+      </section>
+      <section id="view-environment" class="view" hidden>
+        <div class="panel">
+          <h2>Ready on this computer?</h2>
+          <p>
+            Field models enable automatic mapping. A saved four-point setup
+            works without them; player and ball detection use their own models.
+          </p>
+          <div id="environment-list"></div>
+          <button id="refresh-environment">Check again</button>
+          <p class="help">
+            Setup instructions: <code>docs/SETUP.md</code>. Configure model
+            paths in your local <code>.env</code>, then restart the workspace.
+          </p>
+        </div>
+      </section>
+      <section id="view-about" class="view" hidden>
+        <div class="panel reading">
+          <h2>From film to field coordinates.</h2>
+          <p>
+            SoccerMap estimates a pitch plane, detects players and renders the
+            positions that can be mapped. It is a research prototype for short
+            clips, not a full-match analysis service.
+          </p>
+          <h3>What the demonstration shows</h3>
+          <p>
+            The synthetic demo is generated locally. It contains invented
+            players and a deliberate mapping gap from 18 to 24 seconds. It
+            demonstrates controls, cancellation, missing-data handling,
+            analytics and exports. It does not measure computer-vision accuracy
+            or speed.
+          </p>
+          <h3>What real analysis does</h3>
+          <p>
+            Uploaded footage runs through the existing calibration and detection
+            pipeline. Low coverage, uncertain teams and missing ball detections
+            remain possible. Save a camera setup by placing four points, then
+            reuse it while the image view matches. Full-match accuracy and speed
+            still need evaluation.
+          </p>
+          <h3>Local storage</h3>
+          <p>
+            Imported copies and results stay in <code>.soccermap/</code> on this
+            computer, including unsaved runs. They are excluded from Git.
+            Closing the browser does not delete them. Saving adds a reference in
+            Saved analyses.
+          </p>
+        </div>
+      </section>
+      <footer>
+        <span>SoccerMap · Local video analysis</span
+        ><span>Review estimates against your footage.</span>
+      </footer>
+    </main>
+  </body>
+</html>

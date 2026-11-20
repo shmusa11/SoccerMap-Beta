@@ -1,0 +1,52 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.venv*/
+venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# macOS
+.DS_Store
+
+# Project artifacts
+output/
+*.mp4
+*.mov
+*.pt
+
+# Dataset (large)
+soccer-player-ball-tracker.v3i.yolov8/
+soccer-player-ball-tracker.v3i.yolov8.zip
+
+# Secrets
+.env
+
+# Local experiments and test/development artifacts
+scratch/
+.pytest_cache/
+.ruff_cache/
+.soccermap/
+.impeccable/review/
+.coverage
+htmlcov/
+*.MP4
+*.MOV
+*.avi
+*.m4v
+*.pth
+*.pth.tar
+models/
+.env.*
+!.env.example
+
+# Local deployment secrets
+.streamlit/secrets.toml
+
+# Local design inspection artifacts
+.taste-skill/

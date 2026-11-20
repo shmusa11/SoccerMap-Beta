@@ -1,0 +1,28 @@
+numpy
+opencv-python
+supervision           # ByteTrack player tracking
+ultralytics           # local COCO YOLO for players (MPS)
+inference             # roboflow local runtime: football-players-detection model (refs/GK/ball)
+onnxruntime           # CoreML/CPU backend the inference package uses for the soccer model
+tqdm
+scikit-learn          # KMeans team-colour clustering
+torch                 # MPS device for YOLO + (optional) embeddings
+Pillow
+python-dotenv         # ROBOFLOW_API_KEY from .env
+matplotlib            # calibration validation report
+streamlit             # upload-and-view UI (app.py)
+
+# --- external models (clone/download separately, see docs/pnlcalib_setup.md) ---
+# PnLCalib (GPL-2.0, prototype/eval only): clone github.com/mguti97/PnLCalib (SIBLING dir) + SV_kp/SV_lines weights
+#   -> set PNLCALIB_ROOT. This is the field-calibration CNN.
+
+# --- optional / not currently used ---
+# transformers        # DINOv2/SigLIP embeddings — evaluated for team ID, underperformed colour (see docs/STATUS.md)
+# WASB-SBDT           # github.com/nttcom/WASB-SBDT — optional current ball detector; see docs/SETUP.md
+# geocalib            # single-image intrinsics+distortion (not pip-installable; abandoned)
+# gtsam               # factor-graph pose smoother (pose_graph.py; blocked on detection quality)
+
+# Imported directly by calibration optimizers (do not rely on transitive installation).
+scipy
+
+psutil>=5.9,<8         # local worker memory monitoring

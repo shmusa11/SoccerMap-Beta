@@ -1,0 +1,12 @@
+title = "Soccer Map secret scanning"
+
+[extend]
+useDefault = true
+
+# Legacy Roboflow keys have no provider prefix; keep explicit coverage alongside defaults.
+[[rules]]
+id = "roboflow-private-key"
+description = "Hardcoded Roboflow credential"
+regex = '''(?i)(?:roboflow_api_key|ROBOFLOW_API_KEY)\s*[=:]\s*["']([a-z0-9_-]{16,})'''
+secretGroup = 1
+entropy = 3.0

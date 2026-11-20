@@ -1,0 +1,10 @@
+numpy
+opencv-python-headless
+supervision
+ultralytics
+inference-sdk
+tqdm
+scikit-learn
+torch
+transformers
+Pillow
