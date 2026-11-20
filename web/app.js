@@ -362,7 +362,7 @@ function renderProgress() {
     .join("");
   $("process-description").textContent = active
     ? "With cloud AI off, footage stays local. If enabled in fast mode, sampled frames go to OpenAI. You can leave this page open while processing finishes."
-    : "Your source video is unchanged. Resume with these settings, or start a new analysis.";
+    : "Your source video is unchanged. Retry with these settings as a new analysis.";
   if (location.hash === "#processing")
     $("page-title").textContent = active
       ? "Analysis in progress"
@@ -425,7 +425,8 @@ on("cancel-run", "click", async () => {
 on("resume-run", "click", async () => {
   $("resume-run").disabled = true;
   try {
-    job = await api(`/api/runs/${job.id}/resume`, {});
+    job = await api(`/api/runs/${job.id}/retry`, {});
+    sessionStorage.setItem("soccermap-run", job.id);
     result = null;
     renderProgress();
     schedulePoll();
@@ -1717,7 +1718,7 @@ async function loadSaved() {
     ? runs
         .map(
           (run) =>
-            `<article class="saved-row"><div><h2>${escape(run.name)}</h2><p>${escape(new Date(run.created * 1000).toLocaleString())} · ${escape(run.state)}${run.saved ? " · Saved" : ""} · ${run.synthetic ? "Synthetic demo" : "Local clip"}</p></div><button data-open="${run.id}">${runAction(run)}</button></article>`,
+            `<article class="saved-row"><div><h2>${escape(run.name)}</h2><p>${escape(new Date(run.created * 1000).toLocaleString())} · ${escape(run.state)}${run.saved ? " · Saved" : ""} · ${run.synthetic ? "Synthetic demo" : "Local clip"}</p></div><button data-open="${run.id}">${runAction(run)}</button>${run.state === "running" ? "" : `<button data-delete="${run.id}">Delete analysis</button>`}</article>`,
         )
         .join("")
     : '<div class="empty panel"><h2>No analyses yet</h2><p>Completed and stopped runs will appear here, so you can return to them later.</p><a href="#import" class="button primary">Analyze a clip</a></div>';
@@ -1739,6 +1740,15 @@ async function loadSaved() {
       ),
     );
 }
+async function deleteSaved(id) {
+  if (!window.confirm("Delete this analysis and its generated outputs? Your original clip and other analyses will be kept.")) return;
+  await api(`/api/runs/${id}/delete`, {confirmed: true});
+  await loadSaved();
+}
+$("saved-list").addEventListener("click", handle(async (event) => {
+  const button = event.target.closest("[data-delete]");
+  if (button) await deleteSaved(button.dataset.delete);
+}));
 async function loadEnvironment() {
   const env = await api("/api/environment");
   $("environment-list").innerHTML =

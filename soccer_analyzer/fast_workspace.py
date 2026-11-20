@@ -65,6 +65,13 @@ def frame_record(md, res, idx: int, pitch, ball_gate: float) -> dict:
                 if 0 <= point[1] <= pitch.width:
                     ball_xy = [float(point[0]), float(point[1])]
     return {
+        "segment_id": sum(
+            1
+            for f in res.render_frames[1:]
+            if f <= idx and getattr(res, "motion", {}).get(f) is None
+        )
+        if getattr(res, "motion", None)
+        else 0,
         "index": int(idx),
         "time": round((idx - first) / fps, 6),
         "source_time": round(idx / fps, 6),
@@ -188,6 +195,10 @@ def analyze_video_fast(path: Path, directory: Path, settings, report: Callable) 
                 if small.shape[1] != size[0]:
                     small = cv2.resize(small, size, interpolation=cv2.INTER_AREA)
                 record = frame_record(res.md, res, idx, out_pitch, config.ball_gate_offline)
+                segment = record["segment_id"]
+                for player in record["players"]:
+                    player["source_track_id"] = player["id"]
+                    player["id"] = segment * 1000000 + player["id"]
                 H = res.calib.get(idx)
                 if H is not None:
                     calib = FrameCalibration(idx, H @ S_inv, 1.0, "fast", 0, 0)

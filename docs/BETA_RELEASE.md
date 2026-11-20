@@ -22,3 +22,22 @@ The original team's work is retained without rewriting its history. This public 
 raw footage/screenshots, generated analytics, historical camera calibrations, private project
 planning records and local developer paths. The frozen prototype remains in pythonProject1;
 its example input path is now local_clip.mp4. No new blanket license is asserted for dependencies.
+
+## Acceptance fixes completed in the final beta package
+
+New completed runs include input and source-tree SHA-256 fingerprints, a local weight inventory
+with checksums, package versions, and the encoded video's codec, dimensions, frame count and FPS.
+Synthetic output explicitly identifies its generated input and records no model execution.
+CSV exports retain existing columns and add the required run, segment, original-frame, entity
+and observation-status fields. Fast-path track IDs are scoped to verified camera-motion segments.
+
+The default stopped-run action now retries as a NEW run, preserving the original attempt.
+The checkpoint-resume API remains a separate advanced operation. History offers confirmed
+analysis deletion that preserves original inputs and other runs, and refuses active-run deletion.
+Observed-position summaries carry their run, interval and inclusion rules; back-line height
+requires an explicit direction. Tests exercise exact average and 25/75-metre defender fixtures.
+
+The accompanying course demo reuses the existing captioned interim recording at the user's
+request. It shows the established analysis/coaching workflow; it predates these beta corrections.
+Full-model accuracy and deployment limitations remain documented rather than inferred from
+successful contract tests.

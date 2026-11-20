@@ -453,3 +453,62 @@ def test_completed_mapping_can_be_reviewed_and_saved_as_a_camera(server):
     assert camera["width_px"] == 160
     with pytest.raises(urllib.error.HTTPError):
         request(server, f"/api/runs/{ident}/camera/preview", {"frame": 1})
+
+
+def test_beta_retry_new_id_delete_confirmation_and_input_preservation(server):
+    original = server.workspace.start({"upload": "demo", "settings": {"max_frames": 60}})
+    server.workspace.cancel(original["id"])
+    before = (server.workspace.run_path(original["id"]) / "manifest.json").read_bytes()
+    with request(server, f"/api/runs/{original['id']}/retry", {}) as response:
+        retry = json.load(response)
+    assert retry["id"] != original["id"] and retry["retry_of"] == original["id"]
+    assert server.workspace.status(original["id"])["state"] == "cancelled"
+    assert (server.workspace.run_path(original["id"]) / "manifest.json").read_bytes() == before
+    source_marker = server.workspace.uploads / "preserve.txt"
+    source_marker.write_text("original upload")
+    with pytest.raises(urllib.error.HTTPError) as error:
+        request(server, f"/api/runs/{original['id']}/delete", {"confirmed": False})
+    assert error.value.code == 400
+    assert server.workspace.run_path(original["id"]).exists()
+    with request(server, f"/api/runs/{original['id']}/delete", {"confirmed": True}) as response:
+        assert json.load(response)["source_preserved"]
+    assert source_marker.read_text() == "original upload"
+    assert server.workspace.run_path(retry["id"]).exists()
+    server.workspace.cancel(retry["id"])
+
+
+def test_beta_completed_manifest_media_and_csv_contract(server):
+    import csv
+    import io
+
+    run = server.workspace.start({"upload": "demo", "settings": {"max_frames": 300, "stride": 3}})
+    deadline = time.monotonic() + 30
+    while time.monotonic() < deadline:
+        status = server.workspace.status(run["id"])
+        if status["state"] != "running":
+            break
+        time.sleep(0.05)
+    assert status["state"] == "complete", status
+    assert len(status["input_fingerprint"]["sha256"]) == 64
+    assert len(status["code_version"]["value"]) == 64
+    assert status["model_identifiers"] == []
+    video = status["encoded_video"]
+    assert video["width"] > 0 and video["height"] > 0 and video["codec"]
+    assert abs(video["frames"] / video["fps"] - 10) <= 1 / video["fps"]
+    with request(server, f"/api/runs/{run['id']}/csv") as response:
+        rows = list(csv.DictReader(io.StringIO(response.read().decode("utf-8"))))
+    expected = {
+        "run_id",
+        "segment_id",
+        "frame_index",
+        "timestamp_s",
+        "track_id",
+        "entity_class",
+        "x_m",
+        "y_m",
+        "calibration_valid",
+        "observation_status",
+    }
+    assert expected <= rows[0].keys()
+    assert all(r["run_id"] == run["id"] for r in rows)
+    assert all(r["x_m"] == r["y_m"] == "" for r in rows if r["calibration_valid"] == "False")

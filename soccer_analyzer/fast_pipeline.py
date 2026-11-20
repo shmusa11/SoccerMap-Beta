@@ -294,6 +294,7 @@ class FastResult:
     # positions just off the pitch (throw-in takers)
     pitch_xy: Dict[int, Dict[int, Tuple[float, float]]] = field(default_factory=dict)
     onfield_status: Dict[int, str] = field(default_factory=dict)
+    motion: Dict[int, Optional[np.ndarray]] = field(default_factory=dict)
 
 
 class _LazyJpegs(Mapping):
@@ -1199,6 +1200,7 @@ class FastPipeline:
             visible=vis.visible,
             pitch_xy=vis.pitch_xy,
             onfield_status=vis.status,
+            motion=motion,
         )
 
     def _collect_answers(self, jobs, images):

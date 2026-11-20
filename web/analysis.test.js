@@ -102,3 +102,21 @@ test("interpolated players never contribute to observed-position analytics", () 
   assert.equal(summary.samples.length, 1);
   assert.equal(summary.height, null);
 });
+
+test("exact acceptance averages direction and summary provenance", () => {
+  const r = {run_id:"fixture-run", duration:3, settings:{length:100},frames:[
+    {time:0,valid:true,players:[{id:1,team:0,kind:"player",x:10,y:20}]},
+    {time:1,valid:true,players:[{id:1,team:0,kind:"player",x:20,y:40}]},
+    {time:2,valid:false,players:[{id:1,team:0,kind:"player",x:999,y:999}]}
+  ]};
+  const options={start:0,end:3,team:0,selected:[1]};
+  const first=summarize(r,options);
+  assert.deepEqual([first.averages[0].x,first.averages[0].y,first.averages[0].count],[15,30,2]);
+  assert.equal(first.height,null);
+  assert.equal(first.run_id,"fixture-run");
+  assert.deepEqual(first.interval,{start:0,end:3});
+  for(let i=0;i<3;i++) assert.deepEqual(summarize(r,options),first);
+  r.frames=[{time:0,valid:true,players:[{id:1,team:0,kind:"player",x:20,y:20},{id:2,team:0,kind:"player",x:30,y:40}]}];
+  assert.equal(summarize(r,{...options,selected:[1,2],direction:"right"}).height,25);
+  assert.equal(summarize(r,{...options,selected:[1,2],direction:"left"}).height,75);
+});

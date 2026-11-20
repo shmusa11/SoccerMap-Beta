@@ -459,14 +459,13 @@
           </div>
           <p id="process-time" class="help"></p>
           <p id="resume-note" class="help" hidden>
-            Resume keeps the original settings. Completed field and tracking
-            stages are reused when their inputs still match; an unfinished stage
-            starts again.
+            Retry revalidates the original input and settings and creates a new run ID.
+            The stopped attempt remains in history. Fast analysis recomputes its stages.
           </p>
           <div class="process-actions">
             <button id="cancel-run">Cancel analysis</button>
             <button id="resume-run" class="primary" hidden>
-              Resume analysis
+              Retry as new analysis
             </button>
             <button id="retry-run" hidden>Review settings &amp; retry</button>
           </div>

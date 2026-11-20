@@ -244,6 +244,11 @@ def positions_csv(result: dict) -> str:
             "synthetic",
             "measured",
             "clip_time_s",
+            "run_id",
+            "segment_id",
+            "frame_index",
+            "entity_class",
+            "observation_status",
         ]
     )
     for frame in result["frames"]:
@@ -261,6 +266,17 @@ def positions_csv(result: dict) -> str:
                     result["synthetic"],
                     player.get("measured", True) if player else "",
                     frame["time"],
+                    result.get("run_id", ""),
+                    frame.get("segment_id", 0),
+                    frame["index"],
+                    player["kind"] if player else "unknown",
+                    (
+                        "unavailable"
+                        if not frame["valid"] or not player or player.get("x") is None
+                        else "observed"
+                        if player.get("measured", True)
+                        else "interpolated"
+                    ),
                 ]
             )
         if frame.get("ball"):
@@ -278,6 +294,17 @@ def positions_csv(result: dict) -> str:
                     result["synthetic"],
                     frame.get("ball_measured", True),
                     frame["time"],
+                    result.get("run_id", ""),
+                    frame.get("segment_id", 0),
+                    frame["index"],
+                    "ball",
+                    (
+                        "unavailable"
+                        if not frame["valid"]
+                        else "observed"
+                        if frame.get("ball_measured", True)
+                        else "interpolated"
+                    ),
                 ]
             )
     return out.getvalue()

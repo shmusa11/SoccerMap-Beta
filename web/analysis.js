@@ -97,7 +97,10 @@ export function summarize(result, { start, end, team, selected, direction }) {
     coverage: frames.length ? valid.length / frames.length : 0,
     averages,
     samples,
-    height: heights.length
+    run_id: result.run_id || null,
+    interval: {start, end},
+    validity_policy: "valid calibration and finite measured player observations only",
+    height: heights.length && ["left", "right"].includes(direction)
       ? heights.reduce((a, b) => a + b, 0) / heights.length
       : null,
     heightFrames: heights.length,

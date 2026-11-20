@@ -104,3 +104,11 @@ def test_requested_cloud_without_key_falls_back_to_local(monkeypatch):
     warnings = []
     assert make_oracle(Settings(ai_keyframes=True), warnings) is None
     assert warnings == ["AI keyframes requested but no API key is configured; ran locally."]
+
+
+def test_camera_motion_break_scopes_the_same_tracker_id():
+    res = fake_result()
+    res.motion = {20: None, 22: None}
+    a = frame_record(res.md, res, 20, PitchModel(105, 68), 0.05)
+    b = frame_record(res.md, res, 22, PitchModel(105, 68), 0.05)
+    assert a["segment_id"] == 0 and b["segment_id"] == 1

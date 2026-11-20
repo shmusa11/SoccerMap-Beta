@@ -114,6 +114,22 @@ def worker(directory: str, source: str | None, config: dict) -> None:
             if source
             else make_demo(folder, settings, report)
         )
+        from soccer_analyzer.release_record import provenance, encoded_video
+
+        manifest_path = folder / "manifest.json"
+        manifest = (
+            json.loads(manifest_path.read_text()) if manifest_path.exists() else {"id": folder.name}
+        )
+        result["run_id"] = folder.name
+        record = provenance(Path(source) if source else None, ROOT)
+        result.update(record)
+        result["encoded_video"] = encoded_video(folder / "result.mp4")
+        result["validity_policy"] = (
+            "Invalid calibration has no coordinates; observed-position summaries exclude interpolation."
+        )
+        manifest.update(record)
+        manifest["encoded_video"] = result["encoded_video"]
+        write_json(manifest_path, manifest)
         result["elapsed_seconds"] = round(time.monotonic() - started, 2)
         (folder / "positions.csv").write_text(positions_csv(result))
         write_json(folder / "result.json", result)
@@ -334,6 +350,7 @@ class Workspace:
                 "camera_name": setup["name"] if setup else None,
                 "upload": request.get("upload"),
                 "attempts": 1,
+                "retry_of": request.get("retry_of"),
             }
             write_json(folder / "manifest.json", manifest)
             return self._launch(folder, source, settings)
@@ -397,6 +414,27 @@ class Workspace:
             manifest["attempt_started"] = time.time()
             write_json(folder / "manifest.json", manifest)
             return self._launch(folder, source, settings)
+
+    def retry(self, ident: str) -> dict:
+        """Start a distinct attempt after revalidating the retained input and configuration."""
+        with self.lock:
+            previous = self.status(ident)
+            if not previous["resumable"]:
+                raise ValueError("Only a stopped analysis can be retried.")
+            return self.start(
+                {"upload": previous["upload"], "settings": previous["settings"], "retry_of": ident}
+            )
+
+    def delete(self, ident: str, confirmed: bool) -> dict:
+        """Delete only this run's derived files after explicit confirmation; retain inputs."""
+        with self.lock:
+            if confirmed is not True:
+                raise ValueError("Confirm deletion of this analysis first.")
+            if self.status(ident)["state"] == "running":
+                raise ValueError("Cancel the running analysis before deleting it.")
+            folder = self.run_path(ident)
+            shutil.rmtree(folder)
+            return {"deleted": ident, "source_preserved": True}
 
     def camera(self, ident: str) -> dict:
         """Return a saved setup by opaque ID; reference images never leave local storage."""
@@ -706,10 +744,16 @@ class Handler(BaseHTTPRequestHandler):
                 return self.receive_upload()
             if self.path == "/api/runs":
                 return self.respond(self.workspace.start(self.body()), 201)
-            match = re.fullmatch(r"/api/runs/([a-f0-9]{32})/(cancel|save|resume)", self.path)
+            match = re.fullmatch(
+                r"/api/runs/([a-f0-9]{32})/(cancel|save|resume|retry|delete)", self.path
+            )
             if match:
                 ident, action = match.groups()
-                self.body()
+                body = self.body()
+                if action == "retry":
+                    return self.respond(self.workspace.retry(ident), 201)
+                if action == "delete":
+                    return self.respond(self.workspace.delete(ident, body.get("confirmed")))
                 if action == "cancel":
                     return self.respond(self.workspace.cancel(ident))
                 if action == "resume":
