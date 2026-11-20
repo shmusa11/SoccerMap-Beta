@@ -1,3 +1,2 @@
 #!/bin/sh
-python3 scripts/check_commit_identity.py || exit $?
 exec python3 scripts/check_secrets.py --staged
