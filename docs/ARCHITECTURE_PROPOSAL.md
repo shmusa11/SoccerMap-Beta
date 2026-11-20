@@ -55,7 +55,7 @@ panning and zooming. It is not assumed to have one constant homography.
    to make the map look complete.
 
 This does not propose repeating the previously rejected pooled fixed-camera fusion or the
-unconstrained global camera solve described in STATUS.md. Any later temporal optimization
+unconstrained global camera solve tried earlier. Any later temporal optimization
 must be compared against independent anchors and support camera motion explicitly.
 
 ## Small application architecture

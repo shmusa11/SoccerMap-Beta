@@ -18,5 +18,5 @@ it through an adapter does not waive upstream license obligations.
 
 External clones, checkpoints, sample datasets, and footage are local assets rather than
 Git-tracked dependencies. Record the source URL, revision/checksum, access requirements,
-license/permission, and intended use for each in the evaluation manifest (TEAM_PLAN T03/T04).
-Do not claim course practice 13 fully complete until that review and required notices are done.
+license/permission, and intended use for each. The revisions and checksums tested for this
+release are in [RELEASE_RECORD.md](RELEASE_RECORD.md).

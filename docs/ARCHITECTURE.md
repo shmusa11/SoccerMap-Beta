@@ -163,7 +163,7 @@ isolation. Processing is synchronous, with progress and previews between stages.
 | `visualize.py`, `validate.py` | Overlay CLI and report utilities; distinct from current app |
 | `detection.py` | Current shared detector/color primitives plus historical online trackers |
 | `run.py` → `pipeline.py` | Legacy CLI; imports old player/team/data-model helpers |
-| `calibrate.py`, `pythonProject1/` | Original manual setup/prototype and sample artifacts |
+| `calibrate.py` | Original manual calibration tool, kept for reference |
 
 PnLCalib keypoints start in model-input space (960×540), then convert to source pixels.
 PnLCalib and WASB have generic module names that can shadow other packages. Maintain their

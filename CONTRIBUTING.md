@@ -3,32 +3,25 @@
 ## First setup
 
 Follow [setup](docs/SETUP.md) and [personal key setup](docs/SECRETS.md). Install Gitleaks
-for the secret-scanning hook, then configure your own human Git identity:
+for the secret-scanning hook, then configure your own Git identity:
 
 ```bash
 git config user.name "Your Name"
 git config user.email "your-verified-email@example.edu"
-git config user.useConfigOnly true
 git config core.hooksPath .githooks
 ```
 
 Use your own GitHub account and credentials; never share accounts. Each clone needs hook
-setup. If you already use hooks, integrate these checks instead of replacing your hook path.
-The hooks reject common AI identities, AI attribution trailers, accidental author overrides,
-private config files and detected secrets. Gitleaks must be installed before committing.
-They are local guardrails and can be bypassed; they do not prove identity. Signed commits and
-GitHub's authenticated push/PR records provide stronger accountability. Commit author,
-committer, and pusher are distinct metadata; inspect each when auditing contributions.
-
-AI tools may help with code and reviews. The human contributor must understand and verify
-all changes, perform the commit/push themselves, and follow any course AI-disclosure policy.
-See [AGENTS.md](AGENTS.md). Do not falsify authorship or remove legitimate human credit.
+setup. If you already use hooks, integrate this check instead of replacing your hook path.
+The pre-commit hook rejects private config files and detected secrets. Gitleaks must be
+installed before committing. The hook is a local guardrail and can be bypassed; CI repeats
+the scan on every push.
 
 ## One task, one branch, one review
 
 1. Create or claim an issue with owner, reviewer, dependencies, and acceptance criteria.
 2. Move its board card from Backlog to Ready, then In progress. Use `feature/short-name`,
-   `fix/short-name`, or `docs/short-name`; AI workspaces may use `codex/short-name`.
+   `fix/short-name`, or `docs/short-name`.
 3. Make a focused change. Add regression tests for behavior changes and update affected docs.
 4. Run `make check`. For model/calibration changes, also inspect overlays on approved clips.
 5. Review `git diff` and `git status`, then stage specific files and commit as yourself.
@@ -50,10 +43,9 @@ python -m pytest
 python -m compileall -q app.py run.py calibrate.py soccer_analyzer
 ```
 
-Use `make format` for formatting. The historical `pythonProject1/` and local `scratch/` are
-outside lint/test discovery; maintained package code and root entry points are checked.
-CI runs model-free checks on Python 3.11 and 3.12 after pushes and PR updates. A local pass
-is not evidence of a remote CI run: link the successful workflow run in the course checklist.
+Use `make format` for Python formatting and Prettier's defaults for files in `web/`. A local
+`scratch/` folder is outside lint/test discovery; package code and root entry points are
+checked. CI runs the model-free checks on Python 3.11 and 3.12 after pushes and PR updates.
 
 For an integration/model evaluation, record clip identifier and permission, frame range,
 resolution/FPS, settings, dependency/model versions, timing, coverage, observed errors, and

@@ -1,64 +1,92 @@
-# SoccerMap Beta
+# SoccerMap
 
-Turn a short soccer clip into an annotated video and an estimated field map. The local browser
-workspace supports calibration, player tracking, optional ball tracking, synchronized review,
-position exports, saved runs, and coaching views. Coverage is availability, not accuracy.
+SoccerMap turns a short soccer clip into an annotated video and an estimated field map that a
+coach can review in the browser. It runs on one laptop. It shows only what the camera saw, and
+it leaves the map empty whenever it cannot confirm the field.
 
-This is a standalone, sanitized release snapshot of `sprint4-recording-ui` at
-`fa80b4f382b3e1ad38a03f0170a9b3de4285dd06`, with November 20 beta corrections described in
-[release notes](docs/BETA_RELEASE.md). No source repository history, private footage, generated
-match data, credentials, weights, or team/course records are included.
+This repository is the beta release (November 20, 2026). See the
+[release notes](docs/BETA_RELEASE.md) for what changed and what is still limited.
 
-## Start the interface and synthetic demo
+## What it does
 
-Use Python 3.11 and Node.js 18 or newer. In the repository root:
+- **Import** one MP4, MOV, AVI or M4V clip and check it before any model runs.
+- **Set up** the field size, the passage to analyze and the engine. Settings are frozen when a
+  run starts.
+- **Analyze** in a separate worker: player detection and tracking, field calibration, optional
+  ball tracking, then rendering. One run at a time; a run can be cancelled and retried.
+- **Review** the film and the field map on one timeline, with Team A, Team B, goalkeeper,
+  referee and unknown shown by shape as well as colour.
+- **Coach tools**: defense coverage, drawing, a 3D view, match stats, average positions,
+  back-line height and a player heatmap.
+- **Export** the annotated MP4, a positions CSV, the run details and a run log, and reopen
+  saved analyses later without processing them again.
+
+## Quick start: the synthetic demo
+
+Needs Python 3.11 and Node.js 18 or newer. No models, footage or API key.
 
 ```sh
 python3 -m venv .venv
-source .venv/bin/activate
+source .venv/bin/activate          # Windows: .venv\Scripts\Activate.ps1
 python -m pip install -r requirements-dev.txt
 python workspace.py
 ```
 
-Open http://127.0.0.1:8765 and choose **Use demo**, then **Run synthetic demo**. This deliberately
-labeled fixture needs no models or API keys. It demonstrates the interface, not model accuracy.
-On Windows, activate with `.venv\Scripts\Activate.ps1`.
+Open http://127.0.0.1:8765, choose **Use demo**, then **Run synthetic demo**. The demo is
+generated data that shows the interface, including a deliberate gap where the map is
+unavailable. The [quick start](docs/QUICKSTART.md) walks from here to an exported result.
 
-## Process a real clip
+## Analyze a real clip
 
-Install `requirements.txt` and follow [model setup](docs/SETUP.md). Download weights separately;
-none are included here. Configure local paths in your own `.env` using `.env.example`. Use footage
-you have permission to process. Start with 300 original frames. Fast mode selects its own cadence;
-choose classic mode for the detailed sampling controls. Saved camera setups use classic mode.
+1. Install `requirements.txt` and the models described in [setup](docs/SETUP.md). Weights are
+   downloaded separately and are never part of this repository.
+2. Put the model paths in your own `.env` (copy `.env.example`).
+3. Start the workspace, check **Environment**, import a clip you have permission to use, and
+   start with 300 frames.
 
-Cloud AI keyframes are **off by default** in the browser workspace. Enabling that checkbox sends
-sampled frames to OpenAI using your own key, under a $0.30 per-run budget. Model acquisition may
-need internet even with cloud analysis off. The experimental command-line pipeline has its own
-explicit `--ai` option; review its help and [secret handling](docs/SECRETS.md).
+Cloud AI keyframes are **off by default**. Ticking that box for a run sends a few sampled
+frames to OpenAI with your own key, capped at $0.30 per run. With it off, nothing leaves the
+computer. Referee and goalkeeper labels in the fast engine come from those keyframes; without
+them, people are shown as Team A, Team B or unknown.
 
-## Verify the code
+On a computer with a GPU (including Apple silicon), untick **Low memory mode** for 1080p
+clips. Low memory mode runs every model on the CPU and can reach the 4 GB worker limit.
+
+## Check the code
 
 ```sh
 make check
 ```
 
-This runs Ruff, Python tests, JavaScript tests, and compilation. Model-free tests exercise
-contracts and failure handling; they do not establish real-world detection accuracy. The Python
-checks use injected models and generated clips. CI runs on Python 3.11 and 3.12.
+This runs Ruff (lint and format), the Python tests, the JavaScript tests and a compile pass.
+The tests use generated clips and stand-in models, so they need no weights, footage or
+network. CI runs the same command on Python 3.11 and 3.12 and scans for secrets.
+
+## Tested with
+
+macOS 27 on an Apple M2 Pro (32 GB RAM), Python 3.11.4, Chrome 158 and Edge 157. Exact
+package versions and model checksums are in the [release record](docs/RELEASE_RECORD.md).
 
 ## Source map
 
-- `workspace.py` and `web/`: local HTTP service, clip setup, review, exports and coaching tools.
-- `soccer_analyzer/`: geometry, model adapters, fast/classic engines, tracking, export and evaluation.
-- `tests/` and `web/*.test.js`: regression tests.
-- `app.py`: alternate Streamlit interface; `run.py`, `calibrate.py`, `pythonProject1/`: legacy references.
-- `docs/`: setup, architecture, coding standards, testing and provenance.
-- `LICENSES/` and `web/vendor/`: upstream notices. See [third-party components](docs/THIRD_PARTY.md).
+| Path | Contents |
+| --- | --- |
+| `workspace.py` | Local HTTP server: clips, runs, the worker process, exports |
+| `web/` | Browser interface: setup, review, coach tools, analytics and their tests |
+| `soccer_analyzer/` | Calibration, detection, tracking, the fast and classic engines, exports |
+| `tests/` | Python regression tests |
+| `app.py` | Alternate Streamlit interface |
+| `run.py`, `calibrate.py` | Earlier command-line tools, kept for reference |
+| `scripts/` | Secret scan and the command-line fast pipeline |
+| `docs/` | Setup, quick start, architecture, testing, coding standards, release record |
+| `LICENSES/`, `web/vendor/` | Third-party notices; see [third-party components](docs/THIRD_PARTY.md) |
 
-## Limitations
+## Known limits
 
-Mapping can remain unavailable on difficult footage. Ball tracking and team/role estimates are
-not reliable ground truth. Off-camera players are absent. Fast runs recompute when restarted.
-The prototype supports bounded clips, one operator and one worker; it does not support live
-video or promise full-match throughput. Some runtime/model dependencies are not fully locked.
-Retain upstream notices and observe each component's license and model/data terms.
+- Mapping can stay unavailable on hard footage, such as fields with football or lacrosse lines.
+- Ball tracking is sparse at night, so passes and possession are estimates at best.
+- A track ID follows a detected track. It is not a verified player identity.
+- Players the camera does not see are absent; nothing is filled in for them.
+- Clips are limited to 7200 input frames per run. Live video and full-match processing are
+  not supported.
+- Models are loaded again for every run, and a retried fast run starts from the beginning.

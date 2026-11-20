@@ -22,5 +22,6 @@ strings may exceed 100 characters. `pyproject.toml` is the executable configurat
 - Update behavioral tests when behavior changes. Do not rewrite tests simply to accept a
   regression. Run visual checks for changes that affect calibration or detection output.
 
-The maintained Python sources are formatted together. The historical `pythonProject1/`
-prototype is frozen reference material and is excluded from the maintained lint scope.
+All Python sources are formatted together with Ruff. Files in `web/` (JavaScript, HTML and
+CSS, except `web/vendor/`) use Prettier's default style: two spaces, double quotes, trailing
+commas and 80 columns. Document exported JavaScript functions with a short `/** ... */` comment.

@@ -52,8 +52,6 @@ python -m streamlit run app.py
 The startup summary indicates whether officials classification loaded; it never needs to
 print your key. Without this model, COCO people detection and optional WASB ball detection
 remain available. PnLCalib still needs its separate local weights. Tests require no API key.
-Legacy `pythonProject1/` scripts require the environment variable explicitly and do not load
-`.env` themselves; prefer the current app for team development.
 
 ## Keep keys out of commits
 

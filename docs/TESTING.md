@@ -2,24 +2,34 @@
 
 ## Automated checks
 
-Install `requirements-dev.txt` and run `make check`. No API key, private video, PyTorch, or
-model weights are needed. pytest discovers only `tests/`, so historical experiments in
-`scratch/` and `pythonProject1/` do not accidentally run or download models.
+Install `requirements-dev.txt` and run `make check`. No API key, private video, PyTorch or
+model weights are needed. pytest discovers only `tests/`, and the browser logic in `web/` is
+tested with Node's built-in test runner.
 
 | Suite | Coverage |
 | --- | --- |
-| test_video.py | Unknown frame counts, sampled FPS, invalid limits, capture cleanup, encoder fallback/failure |
-| test_calibration.py | Rejected-sample lookup, static-motion gates, matrix validation, injected mapper expiry, pixel-unit RANSAC, decode limits |
-| test_field_detector.py | Keypoint fallback retention, input resizing, default model weight paths |
-| test_match_processor.py | Ball gap interpolation, sampled track interpolation, batch tails, repeat runs, model failures and cadence validation |
-| test_app.py | Model-free Streamlit startup, upload gating, controls, and synthetic-video processing/export/cleanup |
-| test_visualize.py | Honest projection legend and text fitting on smaller frames |
-| test_commit_identity.py | Human identities, legitimate human coauthors, AI trailers and author overrides |
-| test_secrets.py | Private config rejection, redacted staged scanning, missing-scanner failure, and personal-key loading without SDK fallback |
+| test_workspace.py | Settings validation, upload checks, run start/cancel/retry/delete, single worker, interrupted restart, run log, named missing models, provenance, CSV contract, download names |
+| test_fast_workspace.py, test_fast_pipeline.py | Fast-engine result conversion, cloud consent, interpolation labels, camera-segment IDs, source frame indices |
+| test_calibration.py, test_homography.py, test_joint_calib.py, test_field_markings.py, test_field_detector.py, test_multisport.py, test_registration.py, test_height_check.py | Field geometry, rejected samples, injected detectors, camera fits |
+| test_match_processor.py, test_ball_track.py, test_ball_wasb.py, test_player_tracker.py, test_onfield.py, test_detection.py | Tracking, ball path gaps and cuts, on-field filtering |
+| test_checkpoints.py | Stage checkpoints, stale or corrupt files, retry without reloading models |
+| test_video.py, test_visualize.py | Frame limits, sampled frame rate, encoder fallback, overlay legend and class tags |
+| test_camera_setup.py | Four-point setup, preview, reuse and rejected views |
+| test_release_record.py, test_resources.py, test_evaluation.py | Run provenance, memory limits, ball-quality metrics |
+| test_app.py | Streamlit start, upload gating and a synthetic end-to-end run |
+| test_secrets.py | Private config rejection and staged secret scanning |
+| web/*.test.js | Coverage counts, the five classes, frame lookup at boundaries, averages, back-line height, heatmap bins, passage windows, coach insights |
 
-CI executes these checks on Python 3.11 and 3.12. Full inference and visual accuracy are not
-established by a model-free pass. Record local Python/package versions and link a remote
-workflow run after publishing the changes.
+CI runs these checks on Python 3.11 and 3.12. A passing model-free suite does not establish
+detection or calibration accuracy on real footage.
+
+## Acceptance testing
+
+Release acceptance is a separate pass against the running application: each requirement has a
+positive and a negative case with a stated pass criterion. Cases drive the HTTP interface and
+Chrome, use generated clips and injected result fixtures where a known answer is needed, and
+use a real clip for the run, privacy and memory cases. Record the build, tester, date,
+environment and the observed response of every step, and keep failures in the record.
 
 ## Visual/model evaluation
 
@@ -41,30 +51,9 @@ clip, and one multi-sport venue. Keep a fixed raw-frame range and settings for c
 
 ## Known test gaps
 
-Full model loading on a fresh machine, multi-session external import isolation, cancellation
-through every experimental fallback, variable-frame-rate timing, and variable-pitch geometry
-need additional coverage. TEAM_PLAN assigns the next evaluation and implementation tasks.
-
-## Local maintenance verification (2026-09-20)
-
-On macOS with Python 3.11.4: Ruff lint and format checks passed, all **56 tests passed**,
-and maintained-source bytecode compilation and `git diff --check` passed. The test run
-reported third-party Pyparsing deprecation warnings through the tracking dependencies.
-Ruff 0.11.13 was installed in an isolated temporary tool directory for this run; contributors
-install it from requirements-dev.txt. Remote CI and the Python 3.12 matrix remain unverified
-until the workflow runs after a human publishes the changes.
-
-The synthetic-video app test exercised real video decoding, rendering and MP4 encoding:
-12 source frames at 60 FPS, stride 3, produced 4 readable frames at 20 FPS, with temporary
-workspace cleanup. Expensive calibration/model outputs were mocked in that test.
-
-Visual checks inspected a synthetic known-geometry overlay and unavailable-calibration views
-from the first 12 frames of two local clips (daytime multi-sport and night). Each real sample
-had three calibration keyframes and zero accepted anchors; this is an unavailable-state
-smoke check, not an accuracy benchmark. A direct CPU PnLCalib check on a night frame loaded
-the model and returned eight keypoints and an invertible homography, which still did not
-establish acceptance by the independent geometry/line gates. Player/WASB inference and a
-complete real-match export were not revalidated in this maintenance pass.
+Accuracy against independently labelled frames, cold-start timing, a second machine with the
+full model stack, variable-frame-rate clips and browsers other than Chrome and Edge are not
+covered yet.
 
 ## Camera reuse and tracking regressions
 

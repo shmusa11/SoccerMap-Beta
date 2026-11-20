@@ -1,6 +1,7 @@
-# Recording the Sprint 4 interface walkthrough
+# Workspace walkthrough
 
-Run the new local workspace from the repository root:
+A longer tour of the browser workspace. For the one-page version see
+[QUICKSTART.md](QUICKSTART.md). Run the workspace from the repository root:
 
 ```bash
 source .venv/bin/activate
@@ -10,12 +11,12 @@ python workspace.py
 Open **http://127.0.0.1:8765**. This workspace is the product: it runs every automatic
 analysis through the fast keyframe pipeline (`fast_pipeline.py`: sparse verified field
 calibration, camera-motion-compensated player tracking, ball path tracker, on-field filter),
-adapted to the workspace result format by `soccer_analyzer/fast_workspace.py`. When
-`OPENAI_API_KEY` is set in `.env`, AI keyframes (field markings, ball checks, on-field votes)
-are used with a hard $0.30 cap per run, and the spend is shown under processing details; without
-a key the pipeline runs fully offline. Saved four-point camera setups use the classic
-three-pass path (`engine="classic"`). The older Streamlit app (`app.py`) is legacy. Each
-analysis runs in a separate worker process.
+adapted to the workspace result format by `soccer_analyzer/fast_workspace.py`. Cloud AI
+keyframes (field markings, ball checks, on-field votes) are off unless you tick them for a
+run and have set `OPENAI_API_KEY` in `.env`; they have a hard $0.30 cap per run and the spend
+is shown under processing details. Otherwise the pipeline runs fully offline. Saved four-point
+camera setups use the classic three-pass path (`engine="classic"`). The Streamlit app
+(`app.py`) is an alternate interface. Each analysis runs in a separate worker process.
 The workspace keeps import, setup and review in one local workflow. A light workspace and
 compact navigation put the video, field geometry and controls first. On narrow screens the
 navigation moves above the workspace and paired views stack. Synthetic labels and mapping
@@ -36,12 +37,13 @@ warnings stay visible during recording.
 6. After an automatic run, pause on a valid mapped frame and choose **Save this camera view**.
    Review the still overlay before saving it for future clips.
 
-Keep **Low memory mode** enabled on a busy laptop. It uses CPU inference and smaller player
-inputs, with a tradeoff in speed and distant-player detail. Models load in separate phases.
-The worker stops if its RSS exceeds 4 GB or available system memory drops below 1 GB.
+**Low memory mode** uses CPU inference and smaller player inputs, with a tradeoff in speed
+and distant-player detail. On a computer with a GPU, untick it for 1080p clips: with every
+model on the CPU a run can reach the worker limit. The worker stops if its memory exceeds
+4 GB or available system memory drops below 1 GB.
 Leave **Try panorama registration** off for the baseline; it is an unvalidated experiment.
 
-## A reliable recording path
+## A reliable demonstration path
 
 1. Show **Environment**. Explain that file checks are not a full model health test and that
    optional ball models are separate from the required field models.
@@ -49,22 +51,22 @@ Leave **Try panorama registration** off for the baseline; it is an unvalidated e
    locally generated data that demonstrates the interface, not computer-vision accuracy.
 3. Show the field dimensions, starting source frame, raw-frame limit, sampling stride, optional detection and colors.
    The default demo covers 60 seconds. Real footage defaults to a shorter 300-frame run.
-4. Start a run, click **Cancel analysis**, then **Resume analysis** to keep its settings.
-   Completed stages are recovered only when inputs match. Use **Review settings & retry** to
-   start a separate run with different settings. **Analysis history** retains stopped runs
-   across browser and server restarts.
+4. Start a run, click **Cancel analysis**, then **Retry as new analysis** to start a new run
+   with the same settings; the cancelled attempt stays in history. Use **Review settings &
+   retry** to change settings first. **Analysis history** retains stopped runs across browser
+   and server restarts.
    Cancellation terminates the worker and does not expose a partial export as a complete result.
 5. In **Watch** (formerly Synchronized review), play and seek. Toggle map IDs, ball and team filters.
    The video and interactive map use one time control. Video annotations remain fixed;
    layer switches change the interactive map only.
 6. Click **Show mapping gap**. The demo's 18–24 second gap hides field positions while the
    synthetic video continues. No stale points are carried across the gap.
-7. In **Team Shape**, choose an interval and team. Select defender tracks to calculate their
+7. In **Team positions**, choose an interval, team and attacking direction. Select defender tracks to calculate their
    mean distance from the defended goal. Only valid frames where all selected defenders are
    observed together contribute. Reverse direction to explain the defended-goal reference.
 8. Switch to **Player heatmap**, select a track, and explain that brighter cells mean more
    observed samples. Missing views do not contribute; this is not full-match occupancy.
-9. In **Export**, download MP4, CSV and run JSON. Synthetic provenance is retained in all three.
+9. In **Export**, download the MP4, CSV, run details and run log. Synthetic provenance is retained.
    Save the analysis, open **Analysis history**, and reopen it. Refresh to show persistence.
 10. If demonstrating actual inference, import a permitted short daytime clip and run it with
     the configured models. Describe the actual result and coverage rather than using the demo
@@ -108,14 +110,14 @@ player ability, and the ball is placed on the ground (no measured height).
 Implemented: local upload and decode validation, configuration validation, fixed per-run
 settings, asynchronous progress, process cancellation, review, invalid-calibration handling,
 observed-sample average positions and heatmaps, selected-defender height, CSV/JSON/MP4 export,
-saved completed analyses and restart recovery. Real inference runs through the existing
-three-pass algorithm. Routine tests use generated fixtures and injected detectors.
+saved completed analyses and restart recovery. Real inference runs through the fast keyframe
+engine by default. Routine tests use generated fixtures and injected detectors.
 
 Still experimental: real calibration/ball accuracy, nonstandard field dimensions,
-multi-sport footage, team assignments and full-match performance. A saved setup applies to a fixed view. A tripod camera that pans or zooms still needs a
-new mapping; the optional registration experiment has not been validated across venues. A track
+multi-sport footage, team assignments and full-match performance. A saved setup applies to a
+fixed view. A tripod camera that pans or zooms still needs a new mapping; the optional registration experiment has not been validated across venues. A track
 ID is not a verified person. Exports are sampled, silent, constant-frame-rate video.
-The legacy Streamlit entry point retains its original workflow and session model cache;
+The Streamlit entry point retains its original workflow and session model cache;
 workspace workers load models afresh to isolate imports and support cancellation.
 
 ## Local files and access

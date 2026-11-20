@@ -36,10 +36,9 @@ versions. The directory must include `config/hrnetv2_w48.yaml`, `config/hrnetv2_
 ## Players and officials
 
 COCO YOLO handles people, on raw frames (no night enhancement). Put the Ultralytics `yolo11s.pt`
-in `models/` for the best people recall; otherwise existing local `pythonProject1/yolov8n.pt`
-weights are recognized, and failing that the adapter uses `models/yolov8n.pt`, downloading the
-standard model on first use through Ultralytics. Internet is required for initial downloads. Keep
-weights out of Git.
+in `models/` for the best people recall; otherwise the adapter uses `models/yolov8n.pt`,
+downloading the standard model on first use through Ultralytics. Internet is required for
+initial downloads. Keep weights out of Git.
 
 For referee/goalkeeper labels, follow [personal key setup](SECRETS.md) and put your own
 `ROBOFLOW_API_KEY` in your local `.env`. The optional `inference`
@@ -58,9 +57,13 @@ the current offline pipeline does not substitute the older online ball tracker.
 ## Run and check
 
 ```bash
-python -m streamlit run app.py
+python workspace.py              # browser workspace at http://127.0.0.1:8765
+python -m streamlit run app.py   # alternate Streamlit interface
 make check
 ```
+
+Tested browsers: Chrome 158 and Edge 157 on macOS. Review and exported videos are H.264 MP4;
+other browsers are untested.
 
 `make check` runs `ruff` (lint + format check), `pytest` and a compile pass. `ruff` is pinned in
 `requirements-dev.txt`; if it is missing, `make check` stops with an install hint. To keep it
@@ -71,9 +74,12 @@ python -m venv .venv-dev && .venv-dev/bin/pip install -r requirements-dev.txt
 make check PYTHON=.venv-dev/bin/python
 ```
 
-Upload a short MP4/MOV/AVI/M4V. Start with standard 105×68 m geometry and default settings.
+Upload a short MP4/MOV/AVI/M4V. Start with standard 105×68 m geometry and 300 frames.
 Long/high-resolution clips take longer than playback; choose a modest raw-frame limit.
-Models are cached per browser session and can consume substantial memory across sessions.
+The workspace loads models in a separate worker for each run and stops a worker that passes
+4 GB of memory. On a computer with a GPU, untick Low memory mode for 1080p clips: that mode
+keeps every model on the CPU and can reach the limit. The Streamlit interface caches models
+per browser session instead.
 
 The calibration-only visualizer is separate from the current three-pass app:
 
