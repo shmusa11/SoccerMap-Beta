@@ -8,6 +8,7 @@
  */
 import * as THREE from "./vendor/three.module.min.js";
 import { OrbitControls } from "./vendor/OrbitControls.js";
+import { CLASSES, entityClass } from "./analysis.js";
 
 const SKIN = "#d9a77f";
 const KIT = {
@@ -167,7 +168,9 @@ function labelTexture(text) {
   ctx.roundRect(14, 8, 100, 48, 22);
   ctx.fill();
   ctx.fillStyle = "#ffffff";
-  ctx.font = "bold 32px -apple-system, Segoe UI, sans-serif";
+  // Shrink longer labels such as "REF 23" to stay inside the pill.
+  const size = text.length > 5 ? 21 : text.length > 3 ? 26 : 32;
+  ctx.font = `bold ${size}px -apple-system, Segoe UI, sans-serif`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText(text, 64, 33);
@@ -294,6 +297,11 @@ class Figure {
     const key = `${team}|${kind}|${colors[0]}|${colors[1]}`;
     if (key === this.kitKey) return;
     this.kitKey = key;
+    // The label carries a text class tag, so a role never depends on kit colour alone.
+    this.label.material.map.dispose();
+    this.label.material.map = labelTexture(
+      `${CLASSES[entityClass({ team, kind })].tag} ${this.id}`,
+    );
     let kit;
     if (kind === "referee" || team === -2) kit = KIT.referee;
     else if (team !== 0 && team !== 1) kit = KIT.unknown;
@@ -783,7 +791,7 @@ export class Pitch3D {
       f.root.rotation.y = f.heading;
       f.animate(dt, p.speed);
       f.ring.visible = p.id === selected;
-      f.label.visible = this.showIds && p.kind !== "referee";
+      f.label.visible = this.showIds;
     }
     for (const [id, f] of this.figures)
       if (!seen.has(id)) f.root.visible = false;

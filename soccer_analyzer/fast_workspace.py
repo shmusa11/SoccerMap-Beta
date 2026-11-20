@@ -20,6 +20,16 @@ import numpy as np
 from dotenv import load_dotenv
 
 AI_KEYFRAME_CAP_USD = 0.30  # hard per-run ceiling on OpenAI spend
+SEGMENT_ID_SPAN = 1_000_000  # tracker IDs stay far below this within one clip
+
+
+def scoped_track_id(segment: int, track_id: int) -> int:
+    """Track ID that is unique across camera segments.
+
+    The tracker can reuse a number after a cut. Segment 0 keeps the raw ID and later
+    segments are offset, so the same number in two segments is never shown as one person.
+    """
+    return segment * SEGMENT_ID_SPAN + int(track_id)
 
 
 def frame_record(md, res, idx: int, pitch, ball_gate: float) -> dict:
@@ -110,9 +120,9 @@ def analyze_video_fast(path: Path, directory: Path, settings, report: Callable) 
     from soccer_analyzer.detection import SoccerDetector
     from soccer_analyzer.fast_pipeline import FastConfig, FastPipeline
     from soccer_analyzer.resources import configure_inference, release_model_memory
-    from soccer_analyzer.review_render import draw_track_box, review_caption
+    from soccer_analyzer.review_render import class_tag, draw_track_box, review_caption
     from soccer_analyzer.video import frame_window, open_writer
-    from soccer_analyzer.workspace_analysis import COLORS, inspect_video
+    from soccer_analyzer.workspace_analysis import COLORS, inspect_video, load_field_models
 
     meta = inspect_video(path)
     start, stop = frame_window(meta["frames"], settings.max_frames, settings.start_frame)
@@ -132,7 +142,7 @@ def analyze_video_fast(path: Path, directory: Path, settings, report: Callable) 
         min_line_support=0.0,
         device=device,
     )
-    field._ensure_loaded()
+    load_field_models(field)
     people = SoccerDetector(
         roboflow_model_id=None,
         device=device,
@@ -165,8 +175,9 @@ def analyze_video_fast(path: Path, directory: Path, settings, report: Callable) 
             max_frames=stop - start,
             start_frame=start,
             progress=lambda p: report(
-                "Mapping the field, tracking players and the ball", 0.05 + 0.75 * p
+                "Detecting and tracking players and the ball", 0.05 + 0.65 * p
             ),
+            on_stage=lambda _: report("Calibrating the field and mapping positions", 0.72),
         )
     finally:
         if oracle is not None:
@@ -198,7 +209,7 @@ def analyze_video_fast(path: Path, directory: Path, settings, report: Callable) 
                 segment = record["segment_id"]
                 for player in record["players"]:
                     player["source_track_id"] = player["id"]
-                    player["id"] = segment * 1000000 + player["id"]
+                    player["id"] = scoped_track_id(segment, player["id"])
                 H = res.calib.get(idx)
                 if H is not None:
                     calib = FrameCalibration(idx, H @ S_inv, 1.0, "fast", 0, 0)
@@ -210,7 +221,11 @@ def analyze_video_fast(path: Path, directory: Path, settings, report: Callable) 
                 for player in record["players"]:
                     box = [v * scale for v in player.pop("box")]
                     draw_track_box(
-                        overlay, box, COLORS.get(player["team"], COLORS[-1]), player["measured"]
+                        overlay,
+                        box,
+                        COLORS.get(player["team"], COLORS[-1]),
+                        player["measured"],
+                        class_tag(player["team"]),
                     )
                 if record["ball_image"] is not None:
                     centre = tuple(int(v * scale) for v in record["ball_image"])
@@ -242,6 +257,7 @@ def analyze_video_fast(path: Path, directory: Path, settings, report: Callable) 
     return {
         "synthetic": False,
         "engine": "fast",
+        "inference_device": device or "accelerated",
         "settings": {
             **asdict(settings),
             "stride": step,

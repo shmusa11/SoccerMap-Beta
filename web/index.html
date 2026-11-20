@@ -26,8 +26,8 @@
       <div class="local-note">
         <span class="status-dot"></span>Local workspace
         <p>
-          Footage stays local unless you enable cloud AI keyframes. Results are estimates of what the
-          camera can see.
+          Footage stays local unless you enable cloud AI keyframes. Results are
+          estimates of what the camera can see.
         </p>
         <a href="#about">About this prototype</a>
       </div>
@@ -187,7 +187,7 @@
               /></label>
               <button type="button" id="load-camera-frame">Load frame</button>
               <label
-                >Zoom<input
+                >Zoom (×)<input
                   id="setup-zoom"
                   type="range"
                   min="1"
@@ -339,18 +339,28 @@
             </fieldset>
             <fieldset class="panel" aria-labelledby="processing-settings-title">
               <h2 id="processing-settings-title">Processing detail</h2>
-              <label>Analysis engine<select name="engine">
-                <option value="fast">Fast keyframe engine</option>
-                <option value="classic">Classic configurable engine</option>
-              </select></label>
-              <p class="help">Fast mode chooses its own sampling, enhancement and player detection.
-                Stride, ball cadence, player toggle and field-condition controls below apply to
-                classic mode. A saved camera setup also uses classic mode.</p>
-              <label class="check"><input name="ai_keyframes" type="checkbox" />
-                Allow cloud AI keyframes for this run</label>
-              <p class="help">Off by default. In fast mode only, enabling this sends sampled video
-                frames to OpenAI using your own API key, with a $0.30 per-run budget.
-                Leave it off to process footage locally after model setup.</p>
+              <label
+                >Analysis engine<select name="engine">
+                  <option value="fast">Fast keyframe engine</option>
+                  <option value="classic">Classic configurable engine</option>
+                </select></label
+              >
+              <p class="help">
+                Fast mode chooses its own sampling, enhancement and player
+                detection. Stride, ball cadence, player toggle and
+                field-condition controls below apply to classic mode. A saved
+                camera setup also uses classic mode.
+              </p>
+              <label class="check"
+                ><input name="ai_keyframes" type="checkbox" /> Allow cloud AI
+                keyframes for this run</label
+              >
+              <p class="help">
+                Off by default. In fast mode only, enabling this sends sampled
+                video frames to OpenAI using your own API key, with a $0.30
+                per-run budget. Leave it off to process footage locally after
+                model setup.
+              </p>
               <label class="check"
                 ><input name="low_memory" type="checkbox" checked />Low memory
                 mode</label
@@ -376,7 +386,7 @@
                   type="number"
                   min="30"
                   max="7200"
-                  step="30"
+                  step="1"
                   value="300"
                   required
               /></label>
@@ -447,8 +457,8 @@
         <div class="process-panel panel">
           <h2 id="process-title">Preparing your analysis</h2>
           <p id="process-description">
-            With cloud AI off, your clip stays on this computer. You can leave this page open while
-            processing finishes.
+            With cloud AI off, your clip stays on this computer. You can leave
+            this page open while processing finishes.
           </p>
           <h3 id="process-run-name"></h3>
           <dl id="process-settings" class="process-settings"></dl>
@@ -459,8 +469,9 @@
           </div>
           <p id="process-time" class="help"></p>
           <p id="resume-note" class="help" hidden>
-            Retry revalidates the original input and settings and creates a new run ID.
-            The stopped attempt remains in history. Fast analysis recomputes its stages.
+            Retry revalidates the original input and settings and creates a new
+            run ID. The stopped attempt remains in history. Fast analysis
+            recomputes its stages.
           </p>
           <div class="process-actions">
             <button id="cancel-run">Cancel analysis</button>
@@ -520,10 +531,51 @@
                 <h2 id="review-name">Your analysis</h2>
                 <p id="review-detail"></p>
               </div>
-              <span class="legend"
-                ><i class="home-dot"></i>Team A <i class="away-dot"></i>Team
-                B</span
-              >
+              <ul class="legend" aria-label="Map legend">
+                <li>
+                  <svg class="mark" viewBox="0 0 16 16" aria-hidden="true">
+                    <circle class="mark-home" cx="8" cy="8" r="6" />
+                  </svg>
+                  Team A
+                </li>
+                <li>
+                  <svg class="mark" viewBox="0 0 16 16" aria-hidden="true">
+                    <rect
+                      class="mark-away"
+                      x="2"
+                      y="2"
+                      width="12"
+                      height="12"
+                    />
+                  </svg>
+                  Team B
+                </li>
+                <li>
+                  <svg class="mark" viewBox="0 0 16 16" aria-hidden="true">
+                    <path class="mark-keeper" d="M8 1 15 8 8 15 1 8z" />
+                  </svg>
+                  Goalkeeper
+                </li>
+                <li>
+                  <svg class="mark" viewBox="0 0 16 16" aria-hidden="true">
+                    <path class="mark-referee" d="M8 1.5 15 14H1z" />
+                  </svg>
+                  Referee
+                </li>
+                <li>
+                  <svg class="mark" viewBox="0 0 16 16" aria-hidden="true">
+                    <circle class="mark-open" cx="8" cy="8" r="6" />
+                    <text class="mark-text" x="8" y="11.5">?</text>
+                  </svg>
+                  Unknown
+                </li>
+                <li>
+                  <svg class="mark" viewBox="0 0 16 16" aria-hidden="true">
+                    <circle class="mark-open mark-dashed" cx="8" cy="8" r="6" />
+                  </svg>
+                  Filled-in
+                </li>
+              </ul>
             </div>
             <div
               id="coverage-status"
@@ -645,7 +697,8 @@
               </div>
               <div class="media-pane" id="pane-map">
                 <div class="pane-title">
-                  Interactive field map <span>Visible tracks only</span>
+                  Interactive field map
+                  <span>Estimated field outline · visible tracks only</span>
                 </div>
                 <div class="map-wrap">
                   <canvas
@@ -727,7 +780,7 @@
             </div>
             <div class="transport">
               <button id="play" aria-label="Play review">Play</button
-              ><output id="clock">00:00 / 01:00</output>
+              ><output id="clock">00:00 / 01:00 min:sec</output>
               <div class="timeline-wrap">
                 <input
                   id="timeline"
@@ -840,7 +893,9 @@
                   <p class="help" id="network-caption"></p>
                 </section>
                 <section aria-labelledby="moments-title">
-                  <h3 id="moments-title" class="stats-section">Moments</h3>
+                  <h3 id="moments-title" class="stats-section">
+                    Moments (min:sec)
+                  </h3>
                   <ol id="moment-list" class="moment-list"></ol>
                 </section>
               </div>
@@ -891,6 +946,7 @@
                   value="10" /></label
               ><label
                 >Attacking direction<select id="direction">
+                  <option value="">Choose direction</option>
                   <option value="right">To the right</option>
                   <option value="left">To the left</option>
                 </select></label
@@ -956,9 +1012,13 @@
                 <h3>Analysis record</h3>
                 <p>
                   Fixed settings, coverage, timing and limitations. Includes
-                  explicit synthetic-demo provenance.
+                  explicit synthetic-demo provenance. The run log lists each
+                  stage with its elapsed time.
                 </p>
                 <button id="download-settings">Download run details</button>
+                <a id="download-log" class="button" download
+                  >Download run log</a
+                >
               </article>
             </div>
             <div class="save-row">

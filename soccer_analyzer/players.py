@@ -40,7 +40,7 @@ def _pick_device():
 class PlayerDetector:
     def __init__(
         self,
-        weights: str = "pythonProject1/yolov8n.pt",
+        weights: str = "models/yolov8n.pt",
         conf: float = 0.30,
         device: Optional[str] = None,
         imgsz: int = 1280,

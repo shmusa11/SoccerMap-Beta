@@ -1,4 +1,13 @@
-import { frameAt, summarize, PlaybackClock } from "./analysis.js";
+import {
+  CLASSES,
+  HEATMAP_BIN_M,
+  coverageSummary,
+  entityClass,
+  frameAt,
+  heatmapBins,
+  summarize,
+  PlaybackClock,
+} from "./analysis.js";
 import { CalibrationEditor } from "./calibration.js";
 import { passageWindow, runAction } from "./workflow.js";
 import {
@@ -28,6 +37,8 @@ const count = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 const metres = (v) => (Number.isInteger(v) ? String(v) : v.toFixed(1));
 const stamp = (seconds) =>
   `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`;
+// A standalone time always names its unit.
+const clock = (seconds) => `${stamp(seconds)} min:sec`;
 let upload = null,
   job = null,
   result = null,
@@ -204,7 +215,7 @@ function config() {
 }
 async function configureClip() {
   $("clip-summary").innerHTML =
-    `<div><strong>${escape(upload.name)}</strong><p>${upload.id === "demo" ? "60-second synthetic fixture · 30 fps · no model downloads" : `${upload.width} × ${upload.height} · ${upload.fps.toFixed(2)} fps · ${upload.duration ? stamp(upload.duration) : "unknown duration"}`}</p></div><span class="tag">${upload.id === "demo" ? "Synthetic demo" : "Local clip"}</span>`;
+    `<div><strong>${escape(upload.name)}</strong><p>${upload.id === "demo" ? "60-second synthetic fixture · 30 fps · no model downloads" : `${upload.width} × ${upload.height} px · ${upload.fps.toFixed(2)} fps · ${upload.duration ? clock(upload.duration) : "unknown duration"}`}</p></div><span class="tag">${upload.id === "demo" ? "Synthetic demo" : "Local clip"}</span>`;
   settingsForm.elements.max_frames.value = upload.id === "demo" ? 1800 : 300;
   settingsForm.elements.start_frame.value = 0;
   settingsForm.elements.start_frame.disabled = upload.id === "demo";
@@ -227,7 +238,7 @@ function updateDuration() {
     Number(settingsForm.elements.max_frames.value),
   );
   $("duration-hint").textContent = passage
-    ? `${passage.seconds.toFixed(1)} seconds from ${stamp(passage.sourceSeconds)} in the source. Original frames ${passage.start}–${passage.end - 1}.`
+    ? `${passage.seconds.toFixed(1)} seconds from ${clock(passage.sourceSeconds)} in the source. Original frames ${passage.start}–${passage.end - 1}.`
     : "Choose a starting frame inside the video and a positive passage length.";
   $("stride-value").textContent = settingsForm.elements.stride.value;
 }
@@ -238,7 +249,7 @@ async function loadClips() {
   list.innerHTML = clips
     .map(
       (clip) =>
-        `<article class="saved-row"><div><h3>${escape(clip.name)}</h3><p>${clip.storage === "linked" ? "Linked original" : "Local copy"} · ${clip.duration ? stamp(clip.duration) : "Unknown duration"}${clip.available ? "" : " · Missing or changed; import again"}</p></div><button data-clip="${clip.id}" ${clip.available ? "" : "disabled"}>Use clip</button></article>`,
+        `<article class="saved-row"><div><h3>${escape(clip.name)}</h3><p>${clip.storage === "linked" ? "Linked original" : "Local copy"} · ${clip.duration ? clock(clip.duration) : "Unknown duration"}${clip.available ? "" : " · Missing or changed; import again"}</p></div><button data-clip="${clip.id}" ${clip.available ? "" : "disabled"}>Use clip</button></article>`,
     )
     .join("");
   list.querySelectorAll("[data-clip]").forEach((button) =>
@@ -383,7 +394,7 @@ function renderProgress() {
       (job.attempt_started || job.created),
   );
   $("process-time").textContent =
-    `${stamp(elapsed)} elapsed${job.camera_name ? ` · Camera: ${job.camera_name}` : ""}. Processing time depends on the clip and this computer.`;
+    `${clock(elapsed)} elapsed${job.camera_name ? ` · Camera: ${job.camera_name}` : ""}. Processing time depends on the clip and this computer.`;
   $("cancel-run").hidden = !active;
   $("resume-run").hidden = !job.resumable;
   $("resume-note").hidden = !job.resumable;
@@ -447,10 +458,17 @@ async function openResult(id) {
       ) || null
     : null;
   result = await api(`/api/runs/${id}/result`);
+  if (!coverageSummary(result.frames)) {
+    // No rendered frames means no result: never show a 0/0 coverage figure.
+    result = null;
+    throw Error(
+      "This analysis produced no frames, so there is no result to review. Run it again with a longer passage.",
+    );
+  }
   sessionStorage.setItem("soccermap-run", id);
   $("review-name").textContent = job.name;
   $("review-detail").textContent =
-    `${metres(result.settings.length)} × ${metres(result.settings.width)} m field · ${result.frames.length} sampled frames · ${stamp(result.duration)}`;
+    `${metres(result.settings.length)} × ${metres(result.settings.width)} m field · ${result.frames.length} sampled frames · ${clock(result.duration)}`;
   $("provenance").textContent = result.synthetic
     ? "Synthetic demo · Invented players and positions. This demonstrates the interface; no footage was analyzed."
     : "Local analysis · Estimated positions from your clip. Missing mappings and ball observations remain unavailable.";
@@ -495,8 +513,9 @@ async function openResult(id) {
       detail.textContent += ` Recovered completed stages: ${result.reused_stages.join(", ")}. Times above cover this attempt.`;
     diagnostics.append(detail);
   }
+  const coverage = coverageSummary(result.frames);
   $("review-facts").innerHTML =
-    `<span><strong>${new Set(result.frames.flatMap((f) => f.players.map((p) => p.id))).size}</strong>Observed track IDs</span><span><strong>${Math.round(result.coverage * 100)}%</strong>Sampled frames with a map</span><span><strong>${result.ball_available ? "Enabled" : "Unavailable"}</strong>Ball layer</span><span><strong>${result.synthetic ? "Synthetic" : "Local"}</strong>${result.synthetic ? "Illustrative data" : "Processing on this computer"}</span>`;
+    `<span><strong>${new Set(result.frames.flatMap((f) => f.players.map((p) => p.id))).size}</strong>Observed track IDs</span><span><strong>${coverage.percent.toFixed(1)}%</strong>${coverage.valid} of ${coverage.total} sampled frames mapped</span><span><strong>${result.ball_available ? "Enabled" : "Unavailable"}</strong>Ball layer</span><span><strong>${result.synthetic ? "Synthetic" : "Local"}</strong>${result.synthetic ? "Illustrative data" : "Processing on this computer"}</span>`;
   $("timeline").max = Math.max(
     0,
     result.duration - result.settings.stride / result.source.fps,
@@ -514,6 +533,7 @@ async function openResult(id) {
   video.load();
   $("download-video").href = `/api/runs/${id}/video?download=1`;
   $("download-csv").href = `/api/runs/${id}/csv?download=1`;
+  $("download-log").href = `/api/runs/${id}/log`;
   $("export-note").textContent = result.synthetic
     ? "All downloads are labeled as synthetic demo data, including the video itself."
     : "Exported files describe this completed run. Review warnings and missing data before sharing.";
@@ -665,6 +685,8 @@ function field(canvas) {
   ctx.font = "12px Arial";
   ctx.fillText(`0, 0`, 10, 20);
   ctx.fillText(`${metres(result.settings.length)} m`, width - 65, 20);
+  // The outline is the configured field model, not something seen in every frame.
+  ctx.fillText("Field outline: estimated geometry", 10, height - 12);
   return {
     ctx,
     point,
@@ -685,23 +707,51 @@ function field(canvas) {
     },
   };
 }
+/** Trace a class marker: circle, square, diamond, triangle or ring (see CLASSES). */
+function markerPath(ctx, shape, x, y, r) {
+  ctx.beginPath();
+  if (shape === "square") ctx.rect(x - r, y - r, 2 * r, 2 * r);
+  else if (shape === "diamond") {
+    ctx.moveTo(x, y - 1.3 * r);
+    ctx.lineTo(x + 1.3 * r, y);
+    ctx.lineTo(x, y + 1.3 * r);
+    ctx.lineTo(x - 1.3 * r, y);
+    ctx.closePath();
+  } else if (shape === "triangle") {
+    ctx.moveTo(x, y - 1.25 * r);
+    ctx.lineTo(x + 1.2 * r, y + 0.9 * r);
+    ctx.lineTo(x - 1.2 * r, y + 0.9 * r);
+    ctx.closePath();
+  } else ctx.arc(x, y, r, 0, Math.PI * 2);
+}
 function dot(ctx, point, player, ids = true, selected = false) {
   if (!Number.isFinite(player.x) || !Number.isFinite(player.y)) return;
   const [x, y] = point(player.x, player.y);
-  ctx.beginPath();
-  ctx.arc(x, y, selected ? 10 : 8, 0, Math.PI * 2);
+  const kind = entityClass(player),
+    shape = CLASSES[kind].shape;
+  markerPath(ctx, shape, x, y, selected ? 10 : 8);
   ctx.fillStyle =
-    player.team === 0
-      ? $("home-color").value
-      : player.team === 1
-        ? $("away-color").value
-        : "#ced0b9";
-  if (player.measured !== false) ctx.fill();
+    kind === "referee"
+      ? "#f5d72d"
+      : player.team === 0
+        ? $("home-color").value
+        : player.team === 1
+          ? $("away-color").value
+          : "#ced0b9";
+  // Unknown stays an open ring with "?"; filled-in positions stay open and dashed.
+  if (player.measured !== false && shape !== "ring") ctx.fill();
   ctx.strokeStyle = player.measured === false ? ctx.fillStyle : "#fff9df";
   ctx.setLineDash(player.measured === false ? [3, 2] : []);
-  ctx.lineWidth = 1.5;
+  ctx.lineWidth = shape === "ring" ? 2 : 1.5;
   ctx.stroke();
   ctx.setLineDash([]);
+  if (shape === "ring") {
+    ctx.fillStyle = "#fff9df";
+    ctx.font = "bold 11px Arial";
+    ctx.textAlign = "center";
+    ctx.fillText("?", x, y + 4);
+    ctx.textAlign = "left";
+  }
   if (selected) {
     ctx.beginPath();
     ctx.arc(x, y, 15, 0, Math.PI * 2);
@@ -721,9 +771,9 @@ function renderPlayback() {
   if (!result) return;
   const time = Number($("timeline").value),
     frame = frameAt(result.frames, time);
-  $("clock").textContent = `Passage ${stamp(time)} / ${stamp(result.duration)}`;
+  $("clock").textContent = `Passage ${stamp(time)} / ${clock(result.duration)}`;
   $("source-position").textContent = frame
-    ? `Source ${stamp(frame.source_time ?? frame.index / result.source.fps)} · original frame ${frame.index}`
+    ? `Source ${clock(frame.source_time ?? frame.index / result.source.fps)} · original frame ${frame.index}`
     : "Source position unavailable";
   $("play").textContent = !video.paused || manualPlaying ? "Pause" : "Play";
   $("play").setAttribute(
@@ -732,8 +782,8 @@ function renderPlayback() {
   );
   $("coverage-status").classList.toggle("unavailable", !frame.valid);
   $("coverage-status").textContent = frame.valid
-    ? `Map available at ${stamp(time)} · ${frame.players.filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y)).length} mapped tracks (${frame.players.filter((p) => p.measured === false && Number.isFinite(p.x)).length} interpolated). ${Math.round(result.coverage * 100)}% of sampled frames have a valid map.`
-    : `Map unavailable at ${stamp(time)}. Source video continues; projected positions and this frame’s analytics are excluded.`;
+    ? `Map available at ${clock(time)} · ${frame.players.filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y)).length} mapped tracks (${frame.players.filter((p) => p.measured === false && Number.isFinite(p.x)).length} interpolated). ${coverageSummary(result.frames).text}.`
+    : `Map unavailable at ${clock(time)}. Source video continues; projected positions and this frame’s analytics are excluded.`;
   if (!model) return;
   // Smoothed, interpolated positions keep the map and 3D fluid between sampled frames.
   const players = frame.valid ? model.playersAt(time) : [];
@@ -1174,10 +1224,22 @@ function setDrawing(on) {
   renderPlayback();
 }
 
+/** Start time of the sampled frame the film is showing; the map shows the same frame. */
+const filmTime = () => frameAt(result.frames, video.currentTime)?.time ?? 0;
+/**
+ * Seek the film to the middle of the sampled frame at `time`. A seek to the exact frame
+ * boundary can decode the previous frame, which would put the film one sample behind the map.
+ */
+function seekFilm(time) {
+  const frame = frameAt(result.frames, time);
+  video.currentTime =
+    (frame ? frame.time : time) +
+    result.settings.stride / result.source.fps / 2;
+}
 function seek(time) {
   const t = Math.max(0, Math.min(Number($("timeline").max), time));
   $("timeline").value = t;
-  if (!playbackFallback) video.currentTime = t;
+  if (!playbackFallback) seekFilm(t);
   renderPlayback();
 }
 
@@ -1193,7 +1255,7 @@ function renderMoments() {
       "--team",
       teamColor(e.type === "pass" ? e.team : e.wonBy),
     );
-    b.title = `${stamp(e.t)} · ${describe(e)}`;
+    b.title = `${clock(e.t)} · ${describe(e)}`;
     b.setAttribute("aria-label", b.title);
     b.addEventListener("click", () => seek(e.t - 1));
     track.append(b);
@@ -1387,13 +1449,13 @@ function renderNetwork() {
 // While the film plays, redraw once per display frame from its clock; nothing runs when paused.
 function playbackLoop() {
   if (!playing || !result) return;
-  $("timeline").value = Math.min(video.currentTime, Number($("timeline").max));
+  $("timeline").value = Math.min(filmTime(), Number($("timeline").max));
   renderPlayback();
   requestAnimationFrame(playbackLoop);
 }
 video.addEventListener("timeupdate", () => {
   if (!result || playing) return;
-  $("timeline").value = Math.min(video.currentTime, Number($("timeline").max));
+  $("timeline").value = Math.min(filmTime(), Number($("timeline").max));
   renderPlayback();
 });
 video.addEventListener("play", () => {
@@ -1437,7 +1499,7 @@ function tick(now) {
   if (manualPlaying) requestAnimationFrame(tick);
 }
 on("timeline", "input", () => {
-  if (!playbackFallback) video.currentTime = Number($("timeline").value);
+  if (!playbackFallback) seekFilm(Number($("timeline").value));
   else
     manualClock.start(
       Number($("timeline").value),
@@ -1452,7 +1514,7 @@ on("jump-gap", "click", () => {
     video.pause();
     manualPlaying = false;
     $("timeline").value = frame.time;
-    if (!playbackFallback) video.currentTime = frame.time;
+    if (!playbackFallback) seekFilm(frame.time);
     renderPlayback();
   }
 });
@@ -1654,24 +1716,21 @@ function renderShape() {
       "Choose a valid time window to calculate observations.";
     return;
   }
-  const heat = $("shape-mode").value === "heatmap";
+  const heat = $("shape-mode").value === "heatmap",
+    direction = $("direction").value,
+    span = `${summary.interval.start.toFixed(1)}–${summary.interval.end.toFixed(1)} s`;
   if (heat && selected.length) {
-    const bins = new Map();
-    for (const p of summary.samples) {
-      const key = `${Math.min(19, Math.floor((p.x / result.settings.length) * 20))},${Math.min(13, Math.floor((p.y / result.settings.width) * 14))}`;
-      bins.set(key, (bins.get(key) || 0) + 1);
-    }
+    const bins = heatmapBins(summary.samples);
     const max = Math.max(1, ...bins.values());
     for (const [key, count] of bins) {
       const [x, y] = key.split(",").map(Number);
       ctx.fillStyle = `rgba(242,202,88,${0.15 + (0.7 * count) / max})`;
+      // Edge bins are clipped to the touchlines when the field is not a multiple of 5 m.
       ctx.fillRect(
-        ...point(
-          (x * result.settings.length) / 20,
-          (y * result.settings.width) / 14,
-        ),
-        (result.settings.length / 20) * sx,
-        (result.settings.width / 14) * sy,
+        ...point(x * HEATMAP_BIN_M, y * HEATMAP_BIN_M),
+        Math.min(HEATMAP_BIN_M, result.settings.length - x * HEATMAP_BIN_M) *
+          sx,
+        Math.min(HEATMAP_BIN_M, result.settings.width - y * HEATMAP_BIN_M) * sy,
       );
     }
   } else if (!heat) {
@@ -1680,11 +1739,20 @@ function renderShape() {
   }
   $("shape-caption").textContent = heat
     ? selected.length
-      ? `${summary.samples.length} valid observed samples · brighter cells contain more samples · not occupancy outside the camera view.`
+      ? `${summary.samples.length} valid observed samples · ${HEATMAP_BIN_M} m × ${HEATMAP_BIN_M} m bins · observed ${span} · brighter cells contain more samples · not occupancy outside the camera view.`
       : "Select a track above to show its observed-sample density."
-    : `Average positions over valid observations · attacking ${$("direction").value}.`;
+    : `Average positions over valid observations · ${span} · ${direction ? `attacking ${direction}` : "attacking direction not chosen"}.`;
+  const averages = [...summary.averages]
+    .sort((a, b) => a.id - b.id)
+    .map(
+      (t) =>
+        `<li>Track ${t.id}: x ${t.x.toFixed(1)} m, y ${t.y.toFixed(1)} m · ${count(t.count, "sample", "samples")}</li>`,
+    )
+    .join("");
   $("shape-summary").innerHTML =
-    `<p><strong>${summary.averages.length}</strong>Visible tracks in this window</p><p><strong>${Math.round(summary.coverage * 100)}%</strong>Valid mapping coverage · ${summary.valid}/${summary.frames} sampled frames</p><p><strong>${summary.height === null ? "Unavailable" : summary.height.toFixed(1) + " m"}</strong>Selected defenders’ mean distance from the defended goal line<br><small>${selected.length ? `${summary.heightFrames} frames with all ${selected.length} selected tracks visible together` : "Select the defenders above to calculate back-line height."}</small></p>`;
+    `<p><strong>${summary.averages.length}</strong>Visible tracks in this window</p><p><strong>${Math.round(summary.coverage * 100)}%</strong>Valid mapping coverage · ${summary.valid}/${summary.frames} sampled frames</p><p><strong>${summary.height === null ? "Unavailable" : summary.height.toFixed(1) + " m"}</strong>Selected defenders’ mean distance from the defended goal line<br><small>${!selected.length ? "Select the defenders above to calculate back-line height." : !direction ? "Choose the attacking direction to calculate back-line height." : `${summary.heightFrames} frames with all ${selected.length} selected tracks visible together`}</small></p>` +
+    `<p><small>Run ${(summary.run_id || job.id).slice(0, 8)} · ${span} · ${summary.validity_policy}.</small></p>` +
+    (heat ? "" : `<ol class="average-list">${averages}</ol>`);
 }
 on("shape-team", "change", () => {
   makeTrackChoices();
@@ -1718,7 +1786,7 @@ async function loadSaved() {
     ? runs
         .map(
           (run) =>
-            `<article class="saved-row"><div><h2>${escape(run.name)}</h2><p>${escape(new Date(run.created * 1000).toLocaleString())} · ${escape(run.state)}${run.saved ? " · Saved" : ""} · ${run.synthetic ? "Synthetic demo" : "Local clip"}</p></div><button data-open="${run.id}">${runAction(run)}</button>${run.state === "running" ? "" : `<button data-delete="${run.id}">Delete analysis</button>`}</article>`,
+            `<article class="saved-row"><div><h2>${escape(run.name)}</h2><p>Run ${run.id.slice(0, 8)} · ${escape(new Date(run.created * 1000).toLocaleString())} · ${escape(run.state)}${run.saved ? " · Saved" : ""} · ${run.synthetic ? "Synthetic demo" : "Local clip"}</p></div><button data-open="${run.id}">${runAction(run)}</button>${run.state === "running" ? "" : `<button data-delete="${run.id}">Delete analysis</button>`}</article>`,
         )
         .join("")
     : '<div class="empty panel"><h2>No analyses yet</h2><p>Completed and stopped runs will appear here, so you can return to them later.</p><a href="#import" class="button primary">Analyze a clip</a></div>';
@@ -1741,14 +1809,27 @@ async function loadSaved() {
     );
 }
 async function deleteSaved(id) {
-  if (!window.confirm("Delete this analysis and its generated outputs? Your original clip and other analyses will be kept.")) return;
-  await api(`/api/runs/${id}/delete`, {confirmed: true});
+  if (
+    !window.confirm(
+      "Delete this analysis and its generated outputs? Your original clip and other analyses will be kept.",
+    )
+  )
+    return;
+  await api(`/api/runs/${id}/delete`, { confirmed: true });
   await loadSaved();
 }
-$("saved-list").addEventListener("click", handle(async (event) => {
-  const button = event.target.closest("[data-delete]");
-  if (button) await deleteSaved(button.dataset.delete);
-}));
+$("saved-list").addEventListener(
+  "click",
+  handle(async (event) => {
+    const button = event.target.closest("[data-delete]");
+    if (button) await deleteSaved(button.dataset.delete);
+  }),
+);
+/** One sentence for the pre-run system report, with units on every number. */
+function systemLine(system) {
+  const gb = (bytes) => `${(bytes / 1024 ** 3).toFixed(1)} GB`;
+  return `This computer: ${system.os} · ${system.cpu} · ${system.cpu_count} CPU cores · ${gb(system.ram_bytes)} RAM · ${gb(system.free_disk_bytes)} free disk · Python ${system.python}. ${system.qualified ? "Meets" : "Below"} the tested minimum of 16 GB RAM and 5 GB free disk${system.qualified ? "." : "; results on this computer are unqualified."}`;
+}
 async function loadEnvironment() {
   const env = await api("/api/environment");
   $("environment-list").innerHTML =
@@ -1757,7 +1838,8 @@ async function loadEnvironment() {
         (check) =>
           `<div class="environment-row"><strong>${escape(check.name)}<br><small>${check.required ? "Required" : "Optional"}</small></strong><span class="${check.ready ? "ready" : "missing"}">${check.ready ? "File found" : "Missing file"}</span><code>${escape(check.path)}</code></div>`,
       )
-      .join("") + `<p class="help">${escape(env.note)}</p>`;
+      .join("") +
+    `<p class="help">${escape(systemLine(env.system))}</p><p class="help">${escape(env.note)}</p>`;
 }
 on("refresh-environment", "click", loadEnvironment);
 

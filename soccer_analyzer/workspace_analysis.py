@@ -26,7 +26,7 @@ from soccer_analyzer.calibration.height_check import (
 )
 from soccer_analyzer.calibration.pitch_model import PitchModel
 from soccer_analyzer.calibration.visualize import compose, draw_calibration_overlay, draw_topdown
-from soccer_analyzer.review_render import draw_track_box, review_caption
+from soccer_analyzer.review_render import class_tag, draw_track_box, review_caption
 from soccer_analyzer.video import (
     frame_limit,
     frame_window,
@@ -145,8 +145,13 @@ def inspect_video(path: Path) -> dict:
         }
 
 
-def environment() -> dict:
-    """Check local files without loading models, making network requests or exposing secrets."""
+def environment(directory: Path | None = None) -> dict:
+    """Check local files without loading models, making network requests or exposing secrets.
+
+    `directory` is where results are stored; its free disk space is part of the system report.
+    """
+    from soccer_analyzer.resources import system_report
+
     root = Path(
         os.environ.get("PNLCALIB_ROOT", str(Path(__file__).resolve().parents[2] / "PnLCalib"))
     )
@@ -167,8 +172,23 @@ def environment() -> dict:
     return {
         "ready": all(c["ready"] for c in checks if c["required"]),
         "checks": checks,
+        "system": system_report(directory or Path.cwd()),
         "note": "File checks only. Model loading is verified when a run starts. First-time player-model setup may download weights.",
     }
+
+
+def load_field_models(field: PnLCalibFieldDetector) -> None:
+    """Load the PnLCalib weights, turning an unreadable weight file into a next step."""
+    from soccer_analyzer.resources import is_memory_error
+
+    try:
+        field._ensure_loaded()
+    except Exception as exc:
+        if is_memory_error(exc):
+            raise
+        raise ValueError(
+            f"The field models could not be loaded ({type(exc).__name__}). Open Environment to check the model files, then download them again."
+        ) from exc
 
 
 def load_models(
@@ -199,7 +219,7 @@ def load_models(
             min_line_support=0.0,
             device=device,
         )
-        field._ensure_loaded()
+        load_field_models(field)
         field.fusion = None
     player = ball = None
     warnings = []
@@ -225,6 +245,15 @@ def load_models(
                     "Ball model unavailable. This run contains player observations only; check Environment for setup."
                 )
     return field, player, ball, warnings
+
+
+def entity_class(team: int, kind: str) -> str:
+    """One of the five exported classes; an unresolved team or role stays ``unknown``."""
+    if kind == "referee" or team == -2:
+        return "referee"
+    if kind == "goalkeeper" or team == -3:
+        return "goalkeeper"
+    return {0: "team_a", 1: "team_b"}.get(team, "unknown")
 
 
 def positions_csv(result: dict) -> str:
@@ -269,7 +298,7 @@ def positions_csv(result: dict) -> str:
                     result.get("run_id", ""),
                     frame.get("segment_id", 0),
                     frame["index"],
-                    player["kind"] if player else "unknown",
+                    entity_class(player["team"], player["kind"]) if player else "",
                     (
                         "unavailable"
                         if not frame["valid"] or not player or player.get("x") is None
@@ -655,7 +684,9 @@ def analyze_video(
                         estimated = estimate_height(height_camera, (x, y), ((x1 + x2) / 2, y1))
                         if estimated is not None:
                             heights.append(estimated)
-                    draw_track_box(overlay, box, COLORS.get(team, COLORS[-1]), measured)
+                    draw_track_box(
+                        overlay, box, COLORS.get(team, COLORS[-1]), measured, class_tag(team)
+                    )
                 ball_xy = None
                 observed_ball = match.ball.get(index) if match else None
                 if observed_ball:

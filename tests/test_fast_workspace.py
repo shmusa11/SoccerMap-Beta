@@ -112,3 +112,12 @@ def test_camera_motion_break_scopes_the_same_tracker_id():
     a = frame_record(res.md, res, 20, PitchModel(105, 68), 0.05)
     b = frame_record(res.md, res, 22, PitchModel(105, 68), 0.05)
     assert a["segment_id"] == 0 and b["segment_id"] == 1
+
+
+def test_reused_tracker_number_gets_a_different_id_in_each_segment():
+    from soccer_analyzer.fast_workspace import scoped_track_id
+
+    assert scoped_track_id(0, 7) == 7
+    assert scoped_track_id(1, 7) != scoped_track_id(0, 7)
+    assert scoped_track_id(1, 7) == scoped_track_id(1, 7)
+    assert len({scoped_track_id(s, t) for s in range(3) for t in (1, 7, 999)}) == 9

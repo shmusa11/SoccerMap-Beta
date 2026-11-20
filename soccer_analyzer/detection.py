@@ -54,13 +54,13 @@ def default_people_weights() -> str:
     """Local COCO person weights, best first. YOLO11s at 1920 px costs about what YOLOv8n did
     and found more people (audited lab recall 0.93 -> 0.98 at conf 0.25) with 2-5x fewer
     half-body duplicates. Weights live in models/ (git-ignored); place yolo11s.pt there to use
-    it. Without it the legacy yolov8n.pt is used (downloaded to models/ on first use)."""
+    it. Without it yolov8n.pt is used (downloaded to models/ on first use)."""
     from pathlib import Path
 
     repo = Path(__file__).resolve().parents[1]
-    for cand in (repo / "models" / "yolo11s.pt", repo / "pythonProject1" / "yolov8n.pt"):
-        if cand.is_file():
-            return str(cand)
+    best = repo / "models" / "yolo11s.pt"
+    if best.is_file():
+        return str(best)
     target = repo / "models" / "yolov8n.pt"
     target.parent.mkdir(exist_ok=True)
     return str(target)

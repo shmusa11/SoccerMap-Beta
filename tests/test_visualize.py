@@ -67,3 +67,16 @@ def test_topdown_draws_a_player_just_off_the_touchline():
     assert len(changed) > 0
     assert changed[:, 0].max() < 42  # all in the margin above the top touchline
     assert not (far != empty).any()
+
+
+def test_track_boxes_carry_a_text_class_tag_besides_colour():
+    from soccer_analyzer.review_render import class_tag
+
+    assert [class_tag(team) for team in (0, 1, -2, -3, -1, 7)] == ["A", "B", "REF", "GK", "?", "?"]
+    plain = np.zeros((100, 100, 3), np.uint8)
+    tagged = plain.copy()
+    draw_track_box(plain, (30, 40, 70, 90), (255, 255, 255), True)
+    draw_track_box(tagged, (30, 40, 70, 90), (255, 255, 255), True, "GK")
+    # The tag is written above the box and leaves the box itself unchanged.
+    assert tagged[:38].any() and not plain[:38].any()
+    assert np.array_equal(tagged[40:], plain[40:])

@@ -14,6 +14,7 @@ import threading
 import time
 import uuid
 from dataclasses import asdict
+from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
@@ -58,11 +59,33 @@ def write_json(path: Path, data: dict) -> None:
     temporary.replace(path)
 
 
+def append_log(
+    folder: Path, state: str, stage: str, elapsed: float, error: BaseException | None = None
+) -> None:
+    """Append one line to the run's diagnostic log (run.log, JSON lines).
+
+    Records the run ID, state, stage, elapsed seconds and the error type only. Error
+    messages, frames, file paths and environment values are never written.
+    """
+    entry = {
+        "time": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "run_id": folder.name,
+        "state": state,
+        "stage": stage,
+        "elapsed_s": round(elapsed, 2),
+        "error_type": type(error).__name__ if error else None,
+    }
+    with (folder / "run.log").open("a") as file:
+        file.write(json.dumps(entry) + "\n")
+
+
 def worker(directory: str, source: str | None, config: dict) -> None:
     """One process per run isolates external imports and allows prompt cancellation."""
     folder = Path(directory)
     status_lock = threading.Lock()
     finished = threading.Event()
+    started = time.monotonic()
+    logged = {"stage": None}
 
     def watch_memory():
         import psutil
@@ -75,6 +98,9 @@ def worker(directory: str, source: str | None, config: dict) -> None:
                 with status_lock:
                     if finished.is_set():
                         return
+                    append_log(
+                        folder, "failed", "Memory limit reached", time.monotonic() - started, exc
+                    )
                     write_json(
                         folder / "status.json",
                         {
@@ -89,13 +115,15 @@ def worker(directory: str, source: str | None, config: dict) -> None:
 
     def report(stage, progress):
         with status_lock:
+            if stage != logged["stage"]:  # one log line per stage, not per progress tick
+                logged["stage"] = stage
+                append_log(folder, "running", stage, time.monotonic() - started)
             write_json(
                 folder / "status.json",
                 {"state": "running", "stage": stage, "progress": round(progress, 4)},
             )
 
     try:
-        started = time.monotonic()
         settings = Settings.parse(config)
         if source:
             import psutil
@@ -135,6 +163,7 @@ def worker(directory: str, source: str | None, config: dict) -> None:
         write_json(folder / "result.json", result)
         finished.set()
         with status_lock:
+            append_log(folder, "complete", "Ready to review", time.monotonic() - started)
             write_json(
                 folder / "status.json",
                 {"state": "complete", "stage": "Ready to review", "progress": 1},
@@ -142,6 +171,7 @@ def worker(directory: str, source: str | None, config: dict) -> None:
     except Exception as exc:
         finished.set()
         with status_lock:
+            append_log(folder, "failed", "Analysis stopped", time.monotonic() - started, exc)
             write_json(
                 folder / "status.json",
                 {"state": "failed", "stage": "Analysis stopped", "error": str(exc), "progress": 0},
@@ -165,14 +195,36 @@ class Workspace:
         for folder in self.runs.iterdir():
             status_file = folder / "status.json"
             if status_file.exists() and json.loads(status_file.read_text())["state"] == "running":
+                append_log(folder, "interrupted", "Server was stopped", self.elapsed(folder))
                 write_json(
                     status_file,
                     {
                         "state": "interrupted",
-                        "stage": "Server was stopped. Resume to reuse completed stages.",
+                        "stage": "Interrupted: the server was stopped. Retry starts a new run with the saved settings.",
                         "progress": 0,
                     },
                 )
+
+    @staticmethod
+    def elapsed(folder: Path) -> float:
+        """Seconds from the start of the latest attempt to the last status update."""
+        manifest = json.loads((folder / "manifest.json").read_text())
+        began = manifest.get("attempt_started") or manifest.get("created") or time.time()
+        return max(0.0, (folder / "status.json").stat().st_mtime - began)
+
+    def busy(self) -> bool:
+        """True while the worker is still analyzing.
+
+        A worker that has already written its terminal state needs a moment to release its
+        models and exit; wait for that instead of refusing the next run.
+        """
+        if not (self.process and self.process.is_alive()):
+            return False
+        status = json.loads((self.runs / self.active / "status.json").read_text())
+        if status["state"] == "running":
+            return True
+        self.process.join(timeout=10)
+        return self.process.is_alive()
 
     def run_path(self, ident: str) -> Path:
         if not IDENTIFIER.fullmatch(ident):
@@ -284,6 +336,7 @@ class Workspace:
                     "stage": "Worker stopped unexpectedly. Try a shorter clip.",
                     "progress": 0,
                 }
+                append_log(folder, "failed", "Worker stopped unexpectedly", self.elapsed(folder))
                 write_json(folder / "status.json", status)
             return {
                 **json.loads((folder / "manifest.json").read_text()),
@@ -302,13 +355,17 @@ class Workspace:
                 raise ValueError("Choose a clip before starting.")
             metadata = self.upload_metadata(ident)
             source = str(self.source_path(ident))
+            if not Path(source).is_file():
+                raise ValueError("The source clip is missing. Import it again before starting.")
             name = metadata["name"]
             from soccer_analyzer.video import frame_window
 
             frame_window(metadata.get("frames", 0), settings.max_frames, settings.start_frame)
-            if settings.camera_setup is None and not environment()["ready"]:
+            checks = environment()["checks"]
+            missing = [c["name"] for c in checks if c["required"] and not c["ready"]]
+            if settings.camera_setup is None and missing:
                 raise ValueError(
-                    "Required field models are missing. Open Environment for the file locations, or use the synthetic demo."
+                    f"Required field models are missing: {', '.join(missing)}. Open Environment for the file locations, or use the synthetic demo."
                 )
         elif settings.start_frame:
             raise ValueError(
@@ -328,7 +385,7 @@ class Workspace:
                     "This clip has a different image size. Place four points for this resolution."
                 )
         with self.lock:
-            if self.process and self.process.is_alive():
+            if self.busy():
                 raise ValueError(
                     "An analysis is already running. Review its progress or cancel it first."
                 )
@@ -390,7 +447,7 @@ class Workspace:
             status = self.status(ident)
             if not status["resumable"]:
                 raise ValueError("Only a stopped analysis can be resumed.")
-            if self.process and self.process.is_alive():
+            if self.busy():
                 raise ValueError(
                     "Another analysis is running. Finish or cancel it before resuming."
                 )
@@ -549,6 +606,7 @@ class Workspace:
             folder = self.run_path(ident)
             for name in ("result.mp4", "review.mp4", "result.json", "positions.csv", "status.tmp"):
                 (folder / name).unlink(missing_ok=True)
+            append_log(folder, "cancelled", status["stage"], self.elapsed(folder))
             write_json(
                 folder / "status.json",
                 {
@@ -641,7 +699,7 @@ class Handler(BaseHTTPRequestHandler):
                     }
                 )
             if path == "/api/environment":
-                return self.respond(environment())
+                return self.respond(environment(self.workspace.directory))
             if path == "/api/runs":
                 return self.respond(
                     sorted(
@@ -655,7 +713,7 @@ class Handler(BaseHTTPRequestHandler):
                     )
                 )
             match = re.fullmatch(
-                r"/api/runs/([a-f0-9]{32})(?:/(result|video|review|csv|settings))?", path
+                r"/api/runs/([a-f0-9]{32})(?:/(result|video|review|csv|settings|log))?", path
             )
             if match:
                 ident, action = match.groups()
@@ -663,6 +721,8 @@ class Handler(BaseHTTPRequestHandler):
                 folder = self.workspace.run_path(ident)
                 if action is None:
                     return self.respond(status)
+                if action == "log":  # available for stopped runs too
+                    return self.send_file(folder / "run.log", download=True, label=ident[:8])
                 if status["state"] != "complete":
                     raise ValueError("This analysis has no completed export yet.")
                 if action == "settings":
@@ -677,7 +737,9 @@ class Handler(BaseHTTPRequestHandler):
                     "csv": "positions.csv",
                 }[action]
                 return self.send_file(
-                    folder / filename, download="download" in urlparse(self.path).query
+                    folder / filename,
+                    download="download" in urlparse(self.path).query,
+                    label=ident[:8],
                 )
             assets = {
                 "/": "index.html",
@@ -827,7 +889,8 @@ class Handler(BaseHTTPRequestHandler):
             shutil.rmtree(folder)
             raise
 
-    def send_file(self, path: Path, download=False):
+    def send_file(self, path: Path, download=False, label=""):
+        """Send a local file; `label` (a run ID prefix) names a downloaded copy after its run."""
         size = path.stat().st_size
         start, end = 0, size - 1
         range_header = self.headers.get("Range")
@@ -856,7 +919,8 @@ class Handler(BaseHTTPRequestHandler):
         if range_header:
             self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
         if download:
-            self.send_header("Content-Disposition", f'attachment; filename="soccermap-{path.name}"')
+            name = f"soccermap-{label}-{path.name}" if label else f"soccermap-{path.name}"
+            self.send_header("Content-Disposition", f'attachment; filename="{name}"')
         self.end_headers()
         with path.open("rb") as file:
             file.seek(start)

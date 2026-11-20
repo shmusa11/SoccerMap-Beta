@@ -17,7 +17,7 @@ streamlit             # upload-and-view UI (app.py)
 #   -> set PNLCALIB_ROOT. This is the field-calibration CNN.
 
 # --- optional / not currently used ---
-# transformers        # DINOv2/SigLIP embeddings — evaluated for team ID, underperformed colour (see docs/STATUS.md)
+# transformers        # DINOv2/SigLIP embeddings — evaluated for team ID, underperformed colour
 # WASB-SBDT           # github.com/nttcom/WASB-SBDT — optional current ball detector; see docs/SETUP.md
 # geocalib            # single-image intrinsics+distortion (not pip-installable; abandoned)
 # gtsam               # factor-graph pose smoother (pose_graph.py; blocked on detection quality)

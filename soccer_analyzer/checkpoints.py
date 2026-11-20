@@ -79,8 +79,8 @@ def analysis_signature(
         field_root / "SV_kp",
         field_root / "SV_lines",
         ball_root / "wasb_soccer_best.pth.tar",
+        package.parent / "models" / "yolo11s.pt",
         package.parent / "models" / "yolov8n.pt",
-        package.parent / "pythonProject1" / "yolov8n.pt",
     ]
     camera = None
     if reference is not None:

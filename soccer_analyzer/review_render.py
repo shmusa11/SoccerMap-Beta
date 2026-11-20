@@ -4,9 +4,26 @@ import cv2
 import numpy as np
 
 
-def draw_track_box(image: np.ndarray, box: tuple, color: tuple, measured: bool) -> None:
-    """Draw a measured box or four separated corners for an interpolated image box."""
+CLASS_TAGS = {0: "A", 1: "B", -2: "REF", -3: "GK"}
+
+
+def class_tag(team: int) -> str:
+    """Short text class for a team code, so boxes do not rely on colour alone."""
+    return CLASS_TAGS.get(team, "?")
+
+
+def draw_track_box(
+    image: np.ndarray, box: tuple, color: tuple, measured: bool, label: str | None = None
+) -> None:
+    """Draw a measured box or four separated corners for an interpolated image box.
+
+    `label` is an optional class tag (A, B, GK, REF or ?) written above the box.
+    """
     x1, y1, x2, y2 = map(int, box)
+    if label:
+        origin = (x1, max(10, y1 - 4))
+        cv2.putText(image, label, origin, cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 0), 3, cv2.LINE_AA)
+        cv2.putText(image, label, origin, cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1, cv2.LINE_AA)
     if measured:
         cv2.rectangle(image, (x1, y1), (x2, y2), color, 2)
         return
@@ -24,7 +41,7 @@ def review_caption(image: np.ndarray, source_frame: int, valid: bool) -> np.ndar
     result = cv2.copyMakeBorder(image, 0, band, 0, 0, cv2.BORDER_CONSTANT, value=(32, 45, 38))
     lines = [
         f"Source frame {source_frame} | {'Estimated field map' if valid else 'Map unavailable'}",
-        "Green = estimated field | Broken boxes / rings = interpolated",
+        "A/B teams, GK goalkeeper, REF referee, ? unknown | Broken box/ring = interpolated",
     ]
     padding = max(4, round(width * 0.015))
     for row, text in enumerate(lines):

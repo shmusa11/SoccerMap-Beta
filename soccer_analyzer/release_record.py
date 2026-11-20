@@ -9,6 +9,8 @@ from pathlib import Path
 
 import cv2
 
+from soccer_analyzer.resources import system_report
+
 
 def file_sha256(path: Path) -> str:
     digest = hashlib.sha256()
@@ -53,7 +55,6 @@ def provenance(source: Path | None, root: Path) -> dict:
             ("ball", ball / "wasb_soccer_best.pth.tar"),
             ("people_yolo11s", root / "models/yolo11s.pt"),
             ("people_yolov8n", root / "models/yolov8n.pt"),
-            ("people_legacy", root / "pythonProject1/yolov8n.pt"),
         ]:
             models.append(
                 {
@@ -73,6 +74,7 @@ def provenance(source: Path | None, root: Path) -> dict:
         "code_version": {"algorithm": "sha256-source-tree", "value": digest.hexdigest()},
         "model_identifiers": models,
         "package_versions": packages,
+        "runtime": system_report(root),
         "model_note": "Available weight inventory; synthetic runs execute no models. See engine and cloud-use record for actual run mode.",
     }
 

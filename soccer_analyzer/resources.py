@@ -3,18 +3,45 @@
 from __future__ import annotations
 
 import gc
+import os
+import platform
+import shutil
 import sys
+from pathlib import Path
 
 MIB = 1024 * 1024
 WORKER_MEMORY_MB = 4096
 MIN_AVAILABLE_MB = 1024
+MIN_RAM_BYTES = 16 * 1024**3  # tested reference minimum
+MIN_FREE_DISK_BYTES = 5 * 1024**3
+
+
+def system_report(directory: Path) -> dict:
+    """Describe this computer before a run: OS, CPU, RAM, free disk and Python version.
+
+    Free disk is measured where `directory` lives. `qualified` is False below the tested
+    minimum of 16 GB RAM and 5 GB free disk. No paths or user names are included.
+    """
+    import psutil
+
+    ram = psutil.virtual_memory().total
+    free = shutil.disk_usage(directory).free
+    return {
+        "os": f"{platform.system()} {platform.release()}",
+        "cpu": platform.machine(),
+        "cpu_count": os.cpu_count(),
+        "ram_bytes": ram,
+        "free_disk_bytes": free,
+        "python": platform.python_version(),
+        "qualified": ram >= MIN_RAM_BYTES and free >= MIN_FREE_DISK_BYTES,
+    }
 
 
 def check_memory(used: int, available: int, limit_mb: int = WORKER_MEMORY_MB) -> None:
     """Raise before a worker exhausts its RAM budget or the computer's remaining memory."""
     if used > limit_mb * MIB:
         raise MemoryError(
-            "Analysis exceeded its 4 GB memory budget. Use a saved camera setup and Low memory mode, or try a shorter clip."
+            "Analysis exceeded its 4 GB memory budget. Try a shorter passage, or turn off Low memory mode if this computer has a GPU."
         )
     if available < MIN_AVAILABLE_MB * MIB:
         raise MemoryError(

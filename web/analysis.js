@@ -13,16 +13,65 @@ export class PlaybackClock {
   }
 }
 
+// Sampled times are rounded to microseconds, so a time on a frame boundary still
+// belongs to that frame rather than the one before it.
+const TIME_TOLERANCE_S = 1e-4;
+
+/** The sampled frame shown at a passage time (the last frame starting at or before it). */
 export function frameAt(frames, time) {
   if (!frames.length) return null;
   let lo = 0,
     hi = frames.length - 1;
   while (lo < hi) {
     const mid = Math.ceil((lo + hi) / 2);
-    if (frames[mid].time <= time) lo = mid;
+    if (frames[mid].time <= time + TIME_TOLERANCE_S) lo = mid;
     else hi = mid - 1;
   }
   return frames[lo];
+}
+
+/** Calibration coverage as counts and a percentage; null when no frames were rendered. */
+export function coverageSummary(frames) {
+  if (!frames?.length) return null;
+  const valid = frames.filter((f) => f.valid).length,
+    percent = (100 * valid) / frames.length;
+  return {
+    valid,
+    total: frames.length,
+    percent,
+    text: `${valid} of ${frames.length} sampled frames mapped (${percent.toFixed(1)}%)`,
+  };
+}
+
+/** The five displayed classes. Each has a text tag and a marker shape besides its colour. */
+export const CLASSES = {
+  teamA: { label: "Team A", tag: "A", shape: "circle" },
+  teamB: { label: "Team B", tag: "B", shape: "square" },
+  goalkeeper: { label: "Goalkeeper", tag: "GK", shape: "diamond" },
+  referee: { label: "Referee", tag: "REF", shape: "triangle" },
+  unknown: { label: "Unknown", tag: "?", shape: "ring" },
+};
+
+/** Class of one observation; an unresolved team or role stays "unknown". */
+export function entityClass(player) {
+  if (player.kind === "referee" || player.team === -2) return "referee";
+  if (player.kind === "goalkeeper" || player.team === -3) return "goalkeeper";
+  if (player.team === 0) return "teamA";
+  if (player.team === 1) return "teamB";
+  return "unknown";
+}
+
+export const HEATMAP_BIN_M = 5;
+
+/** Count finite samples per square bin: Map of "column,row" -> count (corner origin). */
+export function heatmapBins(samples, size = HEATMAP_BIN_M) {
+  const bins = new Map();
+  for (const p of samples) {
+    if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) continue;
+    const key = `${Math.floor(p.x / size)},${Math.floor(p.y / size)}`;
+    bins.set(key, (bins.get(key) || 0) + 1);
+  }
+  return bins;
 }
 
 export function summarize(result, { start, end, team, selected, direction }) {
@@ -98,11 +147,13 @@ export function summarize(result, { start, end, team, selected, direction }) {
     averages,
     samples,
     run_id: result.run_id || null,
-    interval: {start, end},
-    validity_policy: "valid calibration and finite measured player observations only",
-    height: heights.length && ["left", "right"].includes(direction)
-      ? heights.reduce((a, b) => a + b, 0) / heights.length
-      : null,
+    interval: { start, end },
+    validity_policy:
+      "valid calibration and finite measured player observations only",
+    height:
+      heights.length && ["left", "right"].includes(direction)
+        ? heights.reduce((a, b) => a + b, 0) / heights.length
+        : null,
     heightFrames: heights.length,
   };
 }

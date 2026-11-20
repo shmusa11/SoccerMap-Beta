@@ -532,10 +532,53 @@ progress::-webkit-progress-value {
 }
 .legend {
   display: flex;
-  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px 12px;
   align-items: center;
   font-size: 13px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.legend li {
+  display: flex;
+  align-items: center;
+  gap: 5px;
   white-space: nowrap;
+}
+/* Each class has its own shape, so the legend also reads in grayscale. */
+.mark {
+  width: 14px;
+  height: 14px;
+  stroke: var(--ink);
+  stroke-width: 1;
+}
+.mark-home {
+  fill: var(--home);
+}
+.mark-away {
+  fill: var(--away);
+}
+.mark-keeper {
+  fill: #ced0b9;
+}
+.mark-referee {
+  fill: #f5d72d;
+}
+.mark-open {
+  fill: none;
+  stroke-width: 1.5;
+}
+.mark-dashed {
+  stroke-dasharray: 3 2;
+}
+.mark-text {
+  font-size: 9px;
+  font-weight: 700;
+  text-anchor: middle;
+  fill: var(--ink);
+  stroke: none;
 }
 .home-dot,
 .away-dot {
@@ -547,6 +590,11 @@ progress::-webkit-progress-value {
 }
 .away-dot {
   background: var(--away);
+}
+.average-list {
+  font-size: 13px;
+  margin: 8px 0 0;
+  padding-left: 18px;
 }
 .coverage-status {
   background: #e8efdf;

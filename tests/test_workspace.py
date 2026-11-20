@@ -512,3 +512,216 @@ def test_beta_completed_manifest_media_and_csv_contract(server):
     assert expected <= rows[0].keys()
     assert all(r["run_id"] == run["id"] for r in rows)
     assert all(r["x_m"] == r["y_m"] == "" for r in rows if r["calibration_valid"] == "False")
+
+
+def wait_for(workspace, ident, timeout=30):
+    """Poll one run until it leaves the running state and return its final status."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        status = workspace.status(ident)
+        if status["state"] != "running":
+            return status
+        time.sleep(0.05)
+    return status
+
+
+def read_log(folder):
+    return [json.loads(line) for line in (folder / "run.log").read_text().splitlines()]
+
+
+def test_run_log_names_run_stage_time_and_error_type_without_secrets(server, monkeypatch):
+    from workspace import worker
+
+    marker = "FAKE-SECRET-MARKER-1234"
+    monkeypatch.setenv("OPENAI_API_KEY", marker)
+    run = server.workspace.start({"upload": "demo", "settings": {"max_frames": 60}})
+    assert wait_for(server.workspace, run["id"])["state"] == "complete"
+    folder = server.workspace.run_path(run["id"])
+    entries = read_log(folder)
+    assert entries[-1]["state"] == "complete" and entries[-1]["error_type"] is None
+    assert {e["run_id"] for e in entries} == {run["id"]}
+    assert all(e["stage"] and e["elapsed_s"] >= 0 for e in entries)
+
+    # A failed run records the exception type only, never its message or the source path.
+    failed = server.workspace.runs / ("c" * 32)
+    failed.mkdir()
+    write_json(failed / "manifest.json", {"id": failed.name, "created": time.time()})
+    missing = server.workspace.directory / "private-clip-name.mp4"
+    worker(str(failed), str(missing), asdict(Settings(engine="classic")))
+    last = read_log(failed)[-1]
+    assert last["state"] == "failed" and last["error_type"] == "RuntimeError"
+    assert json.loads((failed / "status.json").read_text())["state"] == "failed"
+    for path in (folder / "run.log", failed / "run.log"):
+        text = path.read_text()
+        assert marker not in text and "private-clip-name" not in text
+    with request(server, f"/api/runs/{failed.name}/log") as response:
+        assert failed.name[:8] in response.headers["Content-Disposition"]
+
+
+def test_cancelled_and_interrupted_runs_are_logged_with_their_stage(server):
+    run = server.workspace.start({"upload": "demo", "settings": {"max_frames": 1800}})
+    server.workspace.cancel(run["id"])
+    assert read_log(server.workspace.run_path(run["id"]))[-1]["state"] == "cancelled"
+    ident = "d" * 32
+    folder = server.workspace.runs / ident
+    folder.mkdir()
+    write_json(folder / "manifest.json", {"id": ident, "created": time.time()})
+    write_json(folder / "status.json", {"state": "running", "stage": "Rendering"})
+    restored = Workspace(server.workspace.directory)
+    assert restored.status(ident)["state"] == "interrupted"
+    assert "new run" in restored.status(ident)["stage"]
+    assert read_log(folder)[-1]["state"] == "interrupted"
+
+
+def test_missing_required_model_is_named_before_any_run_starts(server, tmp_path, monkeypatch):
+    source = tmp_path / "clip.avi"
+    writer = cv2.VideoWriter(str(source), cv2.VideoWriter_fourcc(*"MJPG"), 30, (160, 100))
+    for _ in range(40):
+        writer.write(np.full((100, 160, 3), 90, np.uint8))
+    writer.release()
+    linked = server.workspace.link_video(source)
+    models = tmp_path / "models"
+    models.mkdir()
+    (models / "SV_kp").write_bytes(b"weights")
+    monkeypatch.setenv("PNLCALIB_ROOT", str(models))
+    with pytest.raises(ValueError, match="missing: Field lines"):
+        server.workspace.start({"upload": linked["id"]})
+    assert list(server.workspace.runs.iterdir()) == []
+    with request(server, "/api/environment") as response:
+        report = json.load(response)
+    assert report["ready"] is False
+    assert {"os", "cpu", "ram_bytes", "free_disk_bytes", "python", "qualified"} <= set(
+        report["system"]
+    )
+
+
+def test_downloads_are_named_after_their_run(server):
+    run = server.workspace.start({"upload": "demo", "settings": {"max_frames": 60}})
+    assert wait_for(server.workspace, run["id"])["state"] == "complete"
+    for action, name in (("video", "result.mp4"), ("csv", "positions.csv")):
+        with request(server, f"/api/runs/{run['id']}/{action}?download=1") as response:
+            assert (
+                response.headers["Content-Disposition"]
+                == f'attachment; filename="soccermap-{run["id"][:8]}-{name}"'
+            )
+
+
+def test_csv_keeps_five_classes_and_leaves_unresolved_observations_unknown():
+    players = [
+        {"id": 1, "team": 0, "kind": "player", "x": 0.0, "y": 0.0},
+        {"id": 2, "team": 1, "kind": "player", "x": 20.0, "y": 30.0},
+        {"id": 3, "team": -2, "kind": "referee", "x": 40.0, "y": 30.0},
+        {"id": 4, "team": -3, "kind": "goalkeeper", "x": 5.0, "y": 34.0},
+        {"id": 5, "team": -1, "kind": "player", "x": 60.0, "y": 10.0},
+    ]
+    frames = [
+        {"index": 0, "time": 0.0, "valid": True, "players": players, "ball": [50.0, 34.0]},
+        {"index": 3, "time": 0.1, "valid": False, "players": players, "ball": None},
+    ]
+    text = positions_csv({"frames": frames, "synthetic": True, "run_id": "e" * 32})
+    rows = list(csv.DictReader(io.StringIO(text)))
+    assert [r["entity_class"] for r in rows[:6]] == [
+        "team_a",
+        "team_b",
+        "referee",
+        "goalkeeper",
+        "unknown",
+        "ball",
+    ]
+    # A real observation at the corner keeps its zero; an unmapped frame stays blank.
+    assert (rows[0]["x_m"], rows[0]["y_m"]) == ("0.0", "0.0")
+    assert all(r["x_m"] == r["y_m"] == "" for r in rows[6:])
+    assert {r["observation_status"] for r in rows[6:]} == {"unavailable"}
+
+
+def test_unreadable_field_weights_fail_with_a_next_step():
+    from soccer_analyzer.workspace_analysis import load_field_models
+
+    class Broken:
+        def _ensure_loaded(self):
+            raise EOFError("Ran out of input")
+
+    with pytest.raises(ValueError, match="Open Environment to check the model files"):
+        load_field_models(Broken())
+
+
+def test_failure_while_publishing_never_marks_the_run_complete(server, monkeypatch):
+    import workspace
+
+    earlier = server.workspace.start({"upload": "demo", "settings": {"max_frames": 60}})
+    assert wait_for(server.workspace, earlier["id"])["state"] == "complete"
+    before = {p.name: p.read_bytes() for p in server.workspace.run_path(earlier["id"]).iterdir()}
+    folder = server.workspace.runs / ("f" * 32)
+    folder.mkdir()
+    write_json(folder / "manifest.json", {"id": folder.name, "created": time.time()})
+
+    def interrupted(result):
+        raise OSError("disk write failed")
+
+    # The video is already rendered when the final result files are written.
+    monkeypatch.setattr(workspace, "positions_csv", interrupted)
+    workspace.worker(str(folder), None, asdict(Settings(max_frames=60)))
+    status = json.loads((folder / "status.json").read_text())
+    assert status["state"] == "failed" and not (folder / "result.json").exists()
+    with pytest.raises(urllib.error.HTTPError) as error:
+        request(server, f"/api/runs/{folder.name}/video")
+    assert error.value.code == 400
+    after = {p.name: p.read_bytes() for p in server.workspace.run_path(earlier["id"]).iterdir()}
+    assert after == before
+
+
+def test_missing_ball_model_keeps_players_and_states_the_reason(monkeypatch):
+    from soccer_analyzer import ball_wasb, detection, resources
+    from soccer_analyzer.workspace_analysis import load_models
+
+    def missing(**kwargs):
+        raise FileNotFoundError("wasb_soccer_best.pth.tar")
+
+    monkeypatch.setattr(resources, "configure_inference", lambda low_memory: "cpu")
+    monkeypatch.setattr(detection, "SoccerDetector", lambda **kwargs: "people-detector")
+    monkeypatch.setattr(ball_wasb, "WASBBallDetector", missing)
+    field, player, ball, warnings = load_models(Settings(), lambda *a: None, field_models=False)
+    assert (field, player, ball) == (None, "people-detector", None)
+    assert warnings == [
+        "Ball model unavailable. This run contains player observations only; check Environment for setup."
+    ]
+
+
+def upload_clip(server, tmp_path):
+    """Import a small generated clip as a stored copy and return its metadata."""
+    source = tmp_path / "copy.avi"
+    writer = cv2.VideoWriter(str(source), cv2.VideoWriter_fourcc(*"MJPG"), 30, (160, 100))
+    for _ in range(40):
+        writer.write(np.full((100, 160, 3), 90, np.uint8))
+    writer.release()
+    req = urllib.request.Request(
+        f"http://127.0.0.1:{server.server_port}/api/uploads",
+        data=source.read_bytes(),
+        headers={
+            "X-SoccerMap": "local",
+            "Content-Type": "application/octet-stream",
+            "X-File-Name": "copy.avi",
+        },
+    )
+    with urllib.request.urlopen(req) as response:
+        return json.load(response)
+
+
+def test_start_and_retry_are_blocked_when_the_imported_clip_is_gone(server, tmp_path, monkeypatch):
+    models = tmp_path / "models"
+    models.mkdir()
+    for name in ("SV_kp", "SV_lines"):
+        (models / name).write_bytes(b"weights")
+    monkeypatch.setenv("PNLCALIB_ROOT", str(models))
+    clip = upload_clip(server, tmp_path)
+    (server.workspace.uploads / clip["id"] / clip["stored_name"]).unlink()
+    with pytest.raises(ValueError, match="source clip is missing. Import it again"):
+        server.workspace.start({"upload": clip["id"]})
+    assert list(server.workspace.runs.iterdir()) == []
+
+
+def test_next_run_can_start_as_soon_as_the_previous_one_is_complete(server):
+    for _ in range(3):
+        run = server.workspace.start({"upload": "demo", "settings": {"max_frames": 30}})
+        assert wait_for(server.workspace, run["id"])["state"] == "complete"
+    assert len(list(server.workspace.runs.iterdir())) == 3

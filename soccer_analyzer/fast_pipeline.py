@@ -705,8 +705,13 @@ class FastPipeline:
         max_frames: Optional[int] = None,
         progress=None,
         start_frame: int = 0,
+        on_stage=None,
     ) -> FastResult:
-        """Analyse `max_frames` raw frames starting at `start_frame` (original indices)."""
+        """Analyse `max_frames` raw frames starting at `start_frame` (original indices).
+
+        `progress(fraction)` follows the detection sweep; `on_stage("calibration")` is called
+        once when the sweep ends and field calibration, labels and the ball path begin.
+        """
         cfg, T = self.cfg, self.timer
         frame_limit(0, max_frames)
         if start_frame < 0:
@@ -1015,6 +1020,8 @@ class FastPipeline:
                 ask_more(cfg.markings_keys)
 
         # ---- pass 2: resolve oracle answers, calibration, labels, ball ------------------------
+        if on_stage is not None:
+            on_stage("calibration")
         with T("oracle: waiting for answers"):
             keyframes = {}
             for fidx, job in people_jobs.items():
